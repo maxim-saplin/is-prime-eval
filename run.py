@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Run the prompt-only prime evaluation through OpenRouter."""
+"""Run one or more prompt-only prime evaluations through OpenRouter."""
 
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
+import json
 import os
+from pathlib import Path
 import sys
 from typing import Sequence
 
+from model_specs import ModelSpec, parse_model_qualifier, parse_model_qualifiers
+from multi_run import ModelRunSpec, run_many
 from openrouter import OpenRouterClient, OpenRouterError
+from progress import ProgressReporter
 from runner import (
     DEFAULT_DEPTHS,
     DEFAULT_MAX_ATTEMPTS,
@@ -18,6 +22,7 @@ from runner import (
     DEFAULT_SAMPLES_PER_CLASS,
     DEFAULT_SEED,
     DEFAULT_TIMEOUT_SECONDS,
+    EvaluationInterrupted,
     RunConfig,
     create_dry_run_plan,
     resume_run,
@@ -53,14 +58,28 @@ def parse_depths(value: str) -> tuple[int, ...]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Ask an OpenRouter model whether seeded 4–10 digit integers are prime."
+        description="Ask OpenRouter models whether seeded 4–10 digit integers are prime."
     )
-    parser.add_argument("--model", help="OpenRouter model ID or unique short model name")
-    parser.add_argument("--model-alias", help="Short name shown in the leaderboard")
+    parser.add_argument("--model", help="One OpenRouter model ID or short name")
+    parser.add_argument("--model-alias", help="Display name for a single model run")
+    parser.add_argument(
+        "--model-qualifier",
+        action="append",
+        help=(
+            "Repeat for parallel model runs: MODEL-low, MODEL:medium, or "
+            "ALIAS=MODEL:low (example: gpt-6-luna-low)"
+        ),
+    )
     parser.add_argument(
         "--reasoning-effort",
         choices=("low", "medium"),
-        help="Reasoning effort (default: low); supports low and medium for the requested run",
+        help="Default effort for model specs without a suffix (default: low)",
+    )
+    parser.add_argument(
+        "--parallelism",
+        type=int,
+        default=4,
+        help="Maximum models running at once when using --model-qualifier (default: 4)",
     )
     parser.add_argument("--depths", type=parse_depths, help="e.g. 4-10 or 4,6,8 (default: 4-10)")
     parser.add_argument(
@@ -78,19 +97,73 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum response tokens per request (default: 512)",
     )
     parser.add_argument("--results-dir", default=str(PROJECT_ROOT / "results"))
-    parser.add_argument("--output", help="Explicit path for the JSONL event ledger")
-    parser.add_argument("--resume", help="Resume a JSONL event ledger using its saved manifest")
+    parser.add_argument("--output", help="Explicit JSONL ledger path (one model only)")
+    parser.add_argument("--resume", help="Resume one JSONL event ledger using its saved manifest")
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Resolve the model/prices and print the planned cases; send no chat completions",
+        help="Resolve models/prices and print planned cases; send no chat completions",
     )
     return parser
+
+
+def _settings(args: argparse.Namespace) -> dict:
+    return {
+        "depths": args.depths or DEFAULT_DEPTHS,
+        "samples_per_class": (
+            args.samples_per_class
+            if args.samples_per_class is not None
+            else DEFAULT_SAMPLES_PER_CLASS
+        ),
+        "seed": args.seed if args.seed is not None else DEFAULT_SEED,
+        "max_attempts": args.max_attempts if args.max_attempts is not None else DEFAULT_MAX_ATTEMPTS,
+        "retry_delay_seconds": (
+            args.retry_delay
+            if args.retry_delay is not None
+            else DEFAULT_RETRY_DELAY_SECONDS
+        ),
+        "timeout_seconds": args.timeout if args.timeout is not None else DEFAULT_TIMEOUT_SECONDS,
+        "max_completion_tokens": (
+            args.max_completion_tokens
+            if args.max_completion_tokens is not None
+            else DEFAULT_MAX_COMPLETION_TOKENS
+        ),
+    }
+
+
+def _select_specs(args: argparse.Namespace) -> list[ModelSpec]:
+    env_effort = os.environ.get("REASONING_EFFORT", "low")
+    default_effort = args.reasoning_effort or env_effort
+    if args.model_qualifier:
+        if args.model or args.model_alias:
+            raise ValueError("use --model-qualifier instead of --model/--model-alias")
+        return parse_model_qualifiers(args.model_qualifier, default_effort=default_effort)
+
+    requested_model = args.model or os.environ.get("MODEL", "gpt-6-luna")
+    if args.model:
+        effort = args.reasoning_effort or env_effort
+        alias = args.model_alias or _display_name(requested_model, effort)
+        return [ModelSpec(requested_model, alias, effort)]
+
+    # MODEL in .env may itself be a qualifier such as `gpt-6-luna-low`.
+    spec = parse_model_qualifier(requested_model, default_effort=default_effort)
+    if args.model_alias:
+        spec = ModelSpec(spec.requested_model, args.model_alias, spec.reasoning_effort)
+    return [spec]
 
 
 def _display_name(model: str, effort: str | None) -> str:
     short_name = model.strip().rsplit("/", 1)[-1]
     return f"{short_name}-{effort}" if effort else short_name
+
+
+def _config_for(spec: ModelSpec, values: dict) -> RunConfig:
+    return RunConfig(
+        requested_model=spec.requested_model,
+        display_model=spec.display_model,
+        reasoning_effort=spec.reasoning_effort,
+        **values,
+    )
 
 
 def _dry_run_text(plan: dict) -> str:
@@ -118,53 +191,26 @@ def _dry_run_text(plan: dict) -> str:
     return "\n".join(rows)
 
 
-def _progress(event: dict) -> None:
-    if event.get("event") == "case_finished":
-        print(
-            f"[{event['completed_cases']}/{event['total_cases']}] "
-            f"{event['case_id']}: {event['outcome']}",
-            flush=True,
-        )
-
-
-def _new_config(args: argparse.Namespace) -> tuple[RunConfig, str]:
-    requested_model = args.model or os.environ.get("MODEL", "gpt-6-luna")
-    effort = args.reasoning_effort or os.environ.get("REASONING_EFFORT", "low")
-    alias = args.model_alias or _display_name(requested_model, effort)
-    config = RunConfig(
-        requested_model=requested_model,
-        display_model=alias,
-        reasoning_effort=effort,
-        depths=args.depths or DEFAULT_DEPTHS,
-        samples_per_class=(
-            args.samples_per_class
-            if args.samples_per_class is not None
-            else DEFAULT_SAMPLES_PER_CLASS
-        ),
-        seed=args.seed if args.seed is not None else DEFAULT_SEED,
-        max_attempts=args.max_attempts if args.max_attempts is not None else DEFAULT_MAX_ATTEMPTS,
-        retry_delay_seconds=(
-            args.retry_delay
-            if args.retry_delay is not None
-            else DEFAULT_RETRY_DELAY_SECONDS
-        ),
-        timeout_seconds=args.timeout if args.timeout is not None else DEFAULT_TIMEOUT_SECONDS,
-        max_completion_tokens=(
-            args.max_completion_tokens
-            if args.max_completion_tokens is not None
-            else DEFAULT_MAX_COMPLETION_TOKENS
-        ),
+def _print_run_result(label: str, result: dict) -> None:
+    print(f"Run {'complete' if result['complete'] else 'incomplete'}: {label}")
+    print(f"Ledger: {result['ledger_path']}")
+    print(f"Manifest: {result['manifest_path']}")
+    counts = result["summary"]
+    print(
+        f"Correct: {counts['correct']}/{result['scheduled_cases']}  "
+        f"Incorrect: {counts['incorrect']}/{result['scheduled_cases']}"
     )
-    return config, requested_model
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.resume and args.output:
-        parser.error("--output cannot be combined with --resume")
-    if args.resume and args.dry_run:
-        parser.error("--dry-run cannot be combined with --resume")
+    if args.parallelism <= 0:
+        parser.error("--parallelism must be positive")
+    if args.resume and (args.output or args.dry_run or args.model_qualifier):
+        parser.error("--resume cannot be combined with --output, --dry-run or --model-qualifier")
+    if args.model_qualifier and args.output:
+        parser.error("--output cannot be combined with multiple model qualifiers")
 
     load_dotenv()
     api_key = get_openrouter_key()
@@ -177,67 +223,126 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if not manifest_path.is_file():
             parser.error(f"run manifest not found: {manifest_path}")
-        # The saved manifest supplies timeout and all frozen run settings.
-        import json
-
         saved = json.loads(manifest_path.read_text(encoding="utf-8"))
         saved_config = saved.get("config", {})
         client = OpenRouterClient(
             api_key,
             timeout=float(saved_config.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)),
         )
-        overrides = {
-            "model": args.model,
-            "model_alias": args.model_alias,
-            "reasoning_effort": args.reasoning_effort,
-            "depths": args.depths,
-            "samples_per_class": args.samples_per_class,
-            "seed": args.seed,
-            "max_attempts": args.max_attempts,
-            "max_completion_tokens": args.max_completion_tokens,
-        }
+        reporter = ProgressReporter(stream=sys.stderr)
         try:
+            reporter.set_batch_total(1)
+            saved_dataset = saved.get("dataset", {})
+            reporter.register_model(
+                saved.get("display_model", "model"),
+                int(saved_dataset.get("case_count", 0)),
+            )
             result = resume_run(
                 client=client,
                 ledger_path=args.resume,
-                overrides=overrides,
-                on_progress=_progress,
+                overrides={
+                    "model": args.model,
+                    "model_alias": args.model_alias,
+                    "reasoning_effort": args.reasoning_effort,
+                    "depths": args.depths,
+                    "samples_per_class": args.samples_per_class,
+                    "seed": args.seed,
+                    "max_attempts": args.max_attempts,
+                    "max_completion_tokens": args.max_completion_tokens,
+                },
+                on_progress=reporter,
             )
+        except EvaluationInterrupted as exc:
+            reporter.model_finished(saved.get("display_model", "model"), success=False)
+            print(f"Run paused; resume with: .venv/bin/python run.py --resume {exc.ledger_path}", file=sys.stderr)
+            return 130
         except (ValueError, OSError, OpenRouterError) as exc:
+            reporter.model_finished(saved.get("display_model", "model"), success=False)
             parser.error(str(exc))
-        print(f"Run {'complete' if result['complete'] else 'incomplete'}: {result['ledger_path']}")
-        print(f"Manifest: {result['manifest_path']}")
+        reporter.model_finished(saved.get("display_model", "model"), success=result["complete"])
+        _print_run_result(result["manifest_path"], result)
         return 0 if result["complete"] else 2
 
-    config, requested_model = _new_config(args)
     try:
-        client = OpenRouterClient(api_key, timeout=config.timeout_seconds)
-        model_info = client.resolve_model(requested_model)
-        OpenRouterClient.validate_reasoning_effort(model_info, config.reasoning_effort)
-        if model_info.prompt_rate_usd_per_million is None or model_info.completion_rate_usd_per_million is None:
-            parser.error("OpenRouter model catalog has no input/output rates for this model")
+        specs = _select_specs(args)
+    except (TypeError, ValueError) as exc:
+        parser.error(str(exc))
+    if not specs:
+        parser.error("provide at least one --model-qualifier")
+
+    settings = _settings(args)
+    configs = [_config_for(spec, settings) for spec in specs]
+    catalog_client = OpenRouterClient(api_key, timeout=settings["timeout_seconds"])
+    run_specs: list[ModelRunSpec] = []
+    try:
+        # Resolve every model and price before dispatching any paid inference.
+        for config in configs:
+            model_info = catalog_client.resolve_model(config.requested_model)
+            OpenRouterClient.validate_reasoning_effort(model_info, config.reasoning_effort)
+            if model_info.prompt_rate_usd_per_million is None or model_info.completion_rate_usd_per_million is None:
+                raise ValueError(f"OpenRouter catalog has no input/output rates for {model_info.model_id}")
+            run_specs.append(ModelRunSpec(config=config, model_info=model_info))
         if args.dry_run:
-            plan = create_dry_run_plan(config=config, model_info=model_info)
-            print(_dry_run_text(plan))
+            for index, spec in enumerate(run_specs, start=1):
+                print(f"Model {index}/{len(run_specs)}")
+                print(_dry_run_text(create_dry_run_plan(config=spec.config, model_info=spec.model_info)))
+                print()
             return 0
-        result = run_new(
-            client=client,
-            config=config,
-            model_info=model_info,
-            results_dir=args.results_dir,
-            ledger_path=args.output,
-            on_progress=_progress,
-        )
     except (ValueError, OSError, OpenRouterError) as exc:
         parser.error(str(exc))
 
-    print(f"Run {'complete' if result['complete'] else 'incomplete'}: {result['ledger_path']}")
-    print(f"Manifest: {result['manifest_path']}")
-    print(
-        f"Correct: {result['summary']['correct']}/{result['scheduled_cases']}  "
-        f"Incorrect: {result['summary']['incorrect']}/{result['scheduled_cases']}"
+    reporter = ProgressReporter(stream=sys.stderr)
+    if len(run_specs) == 1:
+        spec = run_specs[0]
+        total = len(spec.config.depths) * spec.config.samples_per_class * 2
+        reporter.set_batch_total(1)
+        reporter.register_model(spec.config.display_model, total)
+        client = OpenRouterClient(api_key, timeout=spec.config.timeout_seconds)
+        try:
+            result = run_new(
+                client=client,
+                config=spec.config,
+                model_info=spec.model_info,
+                results_dir=args.results_dir,
+                ledger_path=args.output,
+                on_progress=reporter,
+            )
+        except EvaluationInterrupted as exc:
+            reporter.model_finished(spec.config.display_model, success=False)
+            print(f"Run paused; resume with: .venv/bin/python run.py --resume {exc.ledger_path}", file=sys.stderr)
+            return 130
+        except (ValueError, OSError, OpenRouterError) as exc:
+            reporter.model_finished(spec.config.display_model, success=False)
+            parser.error(str(exc))
+        reporter.model_finished(spec.config.display_model, success=result["complete"])
+        _print_run_result(spec.config.display_model, result)
+        return 0 if result["complete"] else 2
+
+    results = run_many(
+        run_specs,
+        client_factory=lambda timeout: OpenRouterClient(api_key, timeout=timeout),
+        results_dir=args.results_dir,
+        parallelism=args.parallelism,
+        on_progress=reporter,
     )
-    return 0 if result["complete"] else 2
+    exit_code = 130 if any(row.get("batch_interrupted") for row in results) else 0
+    if exit_code == 130:
+        print(
+            "Batch interrupted. Resume each incomplete model ledger with `run.py --resume <ledger>`.",
+            file=sys.stderr,
+        )
+    for row in results:
+        spec = row["spec"]
+        if row["error"]:
+            print(f"[{spec.config.display_model}] failed: {row['error']}", file=sys.stderr)
+            if exit_code != 130:
+                exit_code = 1
+            continue
+        result = row["result"]
+        _print_run_result(spec.config.display_model, result)
+        if not result["complete"] and exit_code == 0:
+            exit_code = 2
+    return exit_code
 
 
 if __name__ == "__main__":
