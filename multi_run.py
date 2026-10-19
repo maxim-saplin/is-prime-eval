@@ -68,9 +68,9 @@ def run_many(
         for spec in specs[1:]
     ):
         raise ValueError("all models in one parallel batch must share dataset and request settings")
-    display_names = [spec.config.display_model.casefold() for spec in specs]
-    if len(set(display_names)) != len(display_names):
-        raise ValueError("parallel model display names must be unique")
+    identities = [(spec.config.model_id, spec.config.reasoning_effort) for spec in specs]
+    if len(set(identities)) != len(identities):
+        raise ValueError("parallel model_id/reasoning_effort identities must be unique")
 
     prepared_dataset = prepare_case_dataset(results_dir=results_dir, config=first_config)
     if on_progress is not None and hasattr(on_progress, "set_batch_total"):
@@ -82,7 +82,7 @@ def run_many(
         config = spec.config
         if on_progress is not None and hasattr(on_progress, "register_model"):
             total = len(config.depths) * config.samples_per_class * 2
-            on_progress.register_model(config.display_model, total)
+            on_progress.register_model(config.model_id, config.reasoning_effort, total)
         client = client_factory(config.timeout_seconds)
         result = run_new(
             client=client,
@@ -100,7 +100,8 @@ def run_many(
         if on_progress is not None and hasattr(on_progress, "model_finished"):
             result = row.get("result")
             on_progress.model_finished(
-                specs[index].config.display_model,
+                specs[index].config.model_id,
+                specs[index].config.reasoning_effort,
                 success=bool(result and result.get("complete")),
             )
 

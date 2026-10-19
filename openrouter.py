@@ -200,10 +200,8 @@ class OpenRouterClient:
 
     @staticmethod
     def validate_reasoning_effort(model: ModelInfo, effort: str | None) -> None:
-        if effort is None:
-            return
-        if effort not in {"low", "medium", "high"}:
-            raise ValueError("reasoning effort must be low, medium or high")
+        if effort not in {"low", "medium"}:
+            raise ValueError("reasoning effort must be explicitly set to low or medium")
         supported = set(model.supported_parameters)
         if supported and not ({"reasoning_effort", "reasoning"} & supported):
             raise ValueError(
@@ -215,17 +213,18 @@ class OpenRouterClient:
         model_id: str,
         prompt: str,
         *,
-        reasoning_effort: str | None = None,
+        reasoning_effort: str,
         max_completion_tokens: int = 512,
     ) -> dict[str, Any]:
+        if reasoning_effort not in {"low", "medium"}:
+            raise ValueError("reasoning_effort must be explicitly set to low or medium")
         payload: dict[str, Any] = {
             "model": model_id,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
             "max_completion_tokens": max_completion_tokens,
+            "reasoning_effort": reasoning_effort,
         }
-        if reasoning_effort:
-            payload["reasoning_effort"] = reasoning_effort
         response = self._request_json("POST", "/chat/completions", payload)
         error = response.get("error")
         choices = response.get("choices")

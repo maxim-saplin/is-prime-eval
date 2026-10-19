@@ -70,8 +70,7 @@ class GenerationEnrichmentTests(unittest.TestCase):
                 supported_parameters=("reasoning_effort",),
             )
             config = RunConfig(
-                requested_model="gpt-6-luna",
-                display_model="gpt-6-luna-low",
+                model_id="openai/gpt-6-luna",
                 reasoning_effort="low",
                 depths=(4,),
                 samples_per_class=1,

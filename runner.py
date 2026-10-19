@@ -63,9 +63,8 @@ class PreparedDataset:
 
 @dataclass(frozen=True)
 class RunConfig:
-    requested_model: str
-    display_model: str
-    reasoning_effort: str | None = "low"
+    model_id: str
+    reasoning_effort: str
     depths: tuple[int, ...] = DEFAULT_DEPTHS
     samples_per_class: int = DEFAULT_SAMPLES_PER_CLASS
     seed: int = DEFAULT_SEED
@@ -75,10 +74,12 @@ class RunConfig:
     max_completion_tokens: int = DEFAULT_MAX_COMPLETION_TOKENS
 
     def validate(self) -> None:
-        if not self.requested_model.strip():
-            raise ValueError("model ID must not be empty")
-        if not self.display_model.strip():
-            raise ValueError("display model name must not be empty")
+        if not isinstance(self.model_id, str) or not self.model_id.strip():
+            raise ValueError("model_id must be an explicit non-empty OpenRouter model ID")
+        if "/" not in self.model_id or self.model_id.startswith("/") or self.model_id.endswith("/"):
+            raise ValueError("model_id must be fully qualified (provider/model)")
+        if any(character.isspace() for character in self.model_id):
+            raise ValueError("model_id must not contain whitespace")
         if not self.depths or any(depth < 1 or depth > 10 for depth in self.depths):
             raise ValueError("depths must be between 1 and 10")
         if len(set(self.depths)) != len(self.depths):
@@ -93,8 +94,8 @@ class RunConfig:
             raise ValueError("timeout_seconds must be positive")
         if self.max_completion_tokens <= 0:
             raise ValueError("max_completion_tokens must be positive")
-        if self.reasoning_effort not in {None, "low", "medium", "high"}:
-            raise ValueError("reasoning_effort must be low, medium, high or omitted")
+        if self.reasoning_effort not in {"low", "medium"}:
+            raise ValueError("reasoning_effort must be explicitly set to low or medium")
 
 
 def _utc_now() -> str:
@@ -190,7 +191,6 @@ def _safe_slug(value: str) -> str:
 
 def _model_info_to_dict(model_info: ModelInfo) -> dict[str, Any]:
     return {
-        "requested_id": model_info.requested_id,
         "model_id": model_info.model_id,
         "name": model_info.name,
         "prompt_rate_usd_per_million": decimal_text(
@@ -208,9 +208,10 @@ def _model_info_to_dict(model_info: ModelInfo) -> dict[str, Any]:
 def _model_info_from_dict(data: Mapping[str, Any]) -> ModelInfo:
     prompt_rate = data.get("prompt_rate_usd_per_million")
     completion_rate = data.get("completion_rate_usd_per_million")
+    model_id = str(data.get("model_id") or data.get("requested_id") or "")
     return ModelInfo(
-        requested_id=str(data.get("requested_id", "")),
-        model_id=str(data.get("model_id", "")),
+        requested_id=model_id,
+        model_id=model_id,
         name=str(data.get("name", "")),
         prompt_rate_usd_per_million=(Decimal(prompt_rate) if prompt_rate is not None else None),
         completion_rate_usd_per_million=(
@@ -237,6 +238,8 @@ def _make_manifest(
             "with the required estimated-cost accounting"
         )
     config.validate()
+    if config.model_id != model_info.model_id:
+        raise ValueError("model_id in run config does not match resolved OpenRouter model")
     OpenRouterClient.validate_reasoning_effort(model_info, config.reasoning_effort)
     try:
         dataset_ref = dataset_path.relative_to(ledger_path.parent)
@@ -246,7 +249,6 @@ def _make_manifest(
         "schema_version": RUN_SCHEMA_VERSION,
         "run_id": run_id,
         "created_at": _utc_now(),
-        "display_model": config.display_model,
         "model": {
             **_model_info_to_dict(model_info),
             "reasoning_effort": config.reasoning_effort,
@@ -282,7 +284,6 @@ def _make_manifest(
     }
     fingerprint_payload = {
         "model_id": manifest["model"]["model_id"],
-        "display_model": config.display_model,
         "reasoning_effort": config.reasoning_effort,
         "config": manifest["config"],
         "prompt": manifest["prompt"],
@@ -304,16 +305,25 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> None:
     pricing = manifest.get("pricing")
     if not all(isinstance(item, Mapping) for item in (model, config, prompt, dataset, pricing)):
         raise ValueError("run manifest is missing required configuration")
+    model_id = model.get("model_id") or model.get("requested_id")
+    effort = model.get("reasoning_effort") or config.get("reasoning_effort")
+    if not isinstance(model_id, str) or "/" not in model_id:
+        raise ValueError("saved run has no fully qualified model ID")
+    if effort not in {"low", "medium"}:
+        raise ValueError("saved run has no explicit low/medium reasoning effort")
     expected_payload = {
-        "model_id": model.get("model_id"),
-        "display_model": manifest.get("display_model"),
-        "reasoning_effort": model.get("reasoning_effort"),
+        "model_id": model_id,
+        "reasoning_effort": effort,
         "config": config,
         "prompt": prompt,
         "parser_version": manifest.get("parser_version"),
         "dataset_sha256": dataset.get("sha256"),
         "pricing": pricing,
     }
+    # Read old manifests from the first MVP release, where display_model was
+    # part of the config hash. New manifests keep model ID and effort separate.
+    if "display_model" in manifest:
+        expected_payload["display_model"] = manifest.get("display_model")
     if manifest.get("config_sha256") != _sha256(expected_payload):
         raise ValueError("run manifest configuration hash mismatch; refusing resume")
     if prompt.get("version") != PROMPT_VERSION or manifest.get("parser_version") != PARSER_VERSION:
@@ -356,10 +366,12 @@ def _load_dataset(manifest_path: Path, dataset_info: Mapping[str, Any]) -> list[
 
 def _config_from_manifest(manifest: Mapping[str, Any]) -> RunConfig:
     config = manifest["config"]
+    model = manifest.get("model", {})
+    model_id = str(config.get("model_id") or model.get("model_id") or config.get("requested_model") or "")
+    effort = config.get("reasoning_effort") or model.get("reasoning_effort")
     return RunConfig(
-        requested_model=str(config["requested_model"]),
-        display_model=str(config["display_model"]),
-        reasoning_effort=config.get("reasoning_effort"),
+        model_id=model_id,
+        reasoning_effort=effort,
         depths=tuple(int(depth) for depth in config["depths"]),
         samples_per_class=int(config["samples_per_class"]),
         seed=int(config["seed"]),
@@ -377,9 +389,9 @@ def _validate_resume_overrides(
         return
     config = manifest["config"]
     model = manifest["model"]
+    saved_model_id = str(config.get("model_id") or model.get("model_id") or config.get("requested_model") or "")
     checks = {
-        "model": (overrides.get("model"), config.get("requested_model")),
-        "model_alias": (overrides.get("model_alias"), config.get("display_model")),
+        "model_id": (overrides.get("model_id"), saved_model_id),
         "reasoning_effort": (
             overrides.get("reasoning_effort"),
             config.get("reasoning_effort"),
@@ -412,9 +424,10 @@ def _validate_resume_overrides(
         raise ValueError("saved model and pricing snapshot do not match; refusing resume")
 
 
-def _new_ledger_path(results_dir: Path, display_model: str) -> Path:
+def _new_ledger_path(results_dir: Path, model_id: str, reasoning_effort: str) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return results_dir / f"{_safe_slug(display_model)}_{stamp}_{uuid4().hex[:8]}.jsonl"
+    model_slug = _safe_slug(model_id)
+    return results_dir / f"{model_slug}__effort-{reasoning_effort}_{stamp}_{uuid4().hex[:8]}.jsonl"
 
 
 def _extract_response_text(response: Mapping[str, Any]) -> str:
@@ -521,8 +534,8 @@ def _write_run_created(
         {
             "event_type": "run_created",
             "run_id": manifest["run_id"],
-            "display_model": manifest["display_model"],
             "model_id": manifest["model"]["model_id"],
+            "reasoning_effort": manifest["model"]["reasoning_effort"],
             "dataset_id": manifest["dataset"]["dataset_id"],
             "scheduled_cases": manifest["dataset"]["case_count"],
             "config_sha256": manifest["config_sha256"],
@@ -614,9 +627,8 @@ def _record_response(
             "depth": case.depth,
             "number": case.number,
             "gold_label": case.label,
-            "requested_model": config.requested_model,
             "model_id": model_info.model_id,
-            "display_model": config.display_model,
+            "reasoning_effort": config.reasoning_effort,
             "returned_model": response.get("model"),
             "provider_route": response.get("provider") or response.get("provider_name"),
             "response_metadata": response_metadata,
@@ -721,7 +733,7 @@ def _execute_run(
         on_progress(
             {
                 "event": "run_progress_init",
-                "display_model": config.display_model,
+                "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                 "total_cases": len(cases),
                 "completed_cases": len(terminal_cases),
                 "correct": progress_counts["correct"],
@@ -784,7 +796,7 @@ def _execute_run(
                     },
                 )
                 if on_progress:
-                    on_progress({"event": "case_finished", "display_model": config.display_model, "case_id": case.case_id, "outcome": "no_response", "completion_tokens": 0, "total_cases": len(cases)})
+                    on_progress({"event": "case_finished", "model_id": config.model_id, "reasoning_effort": config.reasoning_effort, "case_id": case.case_id, "outcome": "no_response", "completion_tokens": 0, "total_cases": len(cases)})
                 continue
             if next_attempt > max_attempts:
                 append_event(
@@ -800,7 +812,7 @@ def _execute_run(
                     },
                 )
                 if on_progress:
-                    on_progress({"event": "case_finished", "display_model": config.display_model, "case_id": case.case_id, "outcome": "no_response", "completion_tokens": 0, "total_cases": len(cases)})
+                    on_progress({"event": "case_finished", "model_id": config.model_id, "reasoning_effort": config.reasoning_effort, "case_id": case.case_id, "outcome": "no_response", "completion_tokens": 0, "total_cases": len(cases)})
                 continue
 
             while next_attempt <= max_attempts:
@@ -822,19 +834,17 @@ def _execute_run(
                         "depth": case.depth,
                         "number": case.number,
                         "gold_label": case.label,
-                        "requested_model": config.requested_model,
-                        "model_id": model_info.model_id,
-                        "display_model": config.display_model,
+                        "model_id": config.model_id,
+                        "reasoning_effort": config.reasoning_effort,
                         "prompt_version": PROMPT_VERSION,
                         "prompt_sha256": hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
-                        "reasoning_effort": config.reasoning_effort,
                     },
                 )
                 if on_progress:
                     on_progress(
                         {
                             "event": "attempt_started",
-                            "display_model": config.display_model,
+                            "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                             "case_id": case.case_id,
                             "attempt_number": next_attempt,
                             "max_attempts": max_attempts,
@@ -860,7 +870,7 @@ def _execute_run(
                         on_progress(
                             {
                                 "event": "attempt_cancelled_before_dispatch",
-                                "display_model": config.display_model,
+                                "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                                 "case_id": case.case_id,
                                 "attempt_number": next_attempt,
                                 "total_cases": len(cases),
@@ -916,7 +926,7 @@ def _execute_run(
                         on_progress(
                             {
                                 "event": "attempt_failed",
-                                "display_model": config.display_model,
+                                "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                                 "case_id": case.case_id,
                                 "attempt_number": next_attempt,
                                 "max_attempts": max_attempts,
@@ -952,7 +962,7 @@ def _execute_run(
                         on_progress(
                             {
                                 "event": "case_finished",
-                                "display_model": config.display_model,
+                                "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                                 "case_id": case.case_id,
                                 "outcome": "no_response",
                                 "completion_tokens": 0,
@@ -999,7 +1009,7 @@ def _execute_run(
                         on_progress(
                             {
                                 "event": "case_finished",
-                                "display_model": config.display_model,
+                                "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                                 "case_id": case.case_id,
                                 "outcome": "no_response",
                                 "completion_tokens": 0,
@@ -1029,7 +1039,7 @@ def _execute_run(
                     on_progress(
                         {
                             "event": "case_finished",
-                            "display_model": config.display_model,
+                            "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                             "case_id": case.case_id,
                             "outcome": event["outcome"],
                             "completion_tokens": event.get("usage", {}).get("completion_tokens") or 0,
@@ -1055,7 +1065,7 @@ def _execute_run(
                     on_progress(
                         {
                             "event": "case_finished",
-                            "display_model": config.display_model,
+                            "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                             "case_id": case.case_id,
                             "outcome": "no_response",
                             "completion_tokens": 0,
@@ -1147,8 +1157,8 @@ def _run_new_unlocked(
 ) -> dict[str, Any]:
     """Create a frozen dataset/run manifest and execute a new evaluation."""
     config.validate()
-    if config.requested_model != model_info.requested_id:
-        raise ValueError("requested model in config does not match resolved model")
+    if config.model_id != model_info.model_id:
+        raise ValueError("model_id in run config does not match resolved OpenRouter model")
     OpenRouterClient.validate_reasoning_effort(model_info, config.reasoning_effort)
     if model_info.prompt_rate_usd_per_million is None or model_info.completion_rate_usd_per_million is None:
         raise ValueError("model input/output rates are required for normalized cost estimates")
@@ -1169,7 +1179,11 @@ def _run_new_unlocked(
             or not dataset_path.is_file()
         ):
             raise ValueError("prepared dataset does not match run configuration")
-    ledger = Path(ledger_path).resolve() if ledger_path is not None else _new_ledger_path(root, config.display_model)
+    ledger = (
+        Path(ledger_path).resolve()
+        if ledger_path is not None
+        else _new_ledger_path(root, config.model_id, config.reasoning_effort)
+    )
     if ledger.exists() or _manifest_path(ledger).exists():
         raise FileExistsError(f"run output already exists: {ledger}")
 
@@ -1214,7 +1228,7 @@ def run_new(
     ledger = (
         Path(ledger_path).resolve()
         if ledger_path is not None
-        else _new_ledger_path(root, config.display_model)
+        else _new_ledger_path(root, config.model_id, config.reasoning_effort)
     )
     try:
         with ledger_lock(ledger):
@@ -1327,8 +1341,8 @@ def create_dry_run_plan(
 ) -> dict[str, Any]:
     """Build a no-inference plan for review; no run files are written."""
     config.validate()
-    if config.requested_model != model_info.requested_id:
-        raise ValueError("requested model in config does not match resolved model")
+    if config.model_id != model_info.model_id:
+        raise ValueError("model_id in run config does not match resolved OpenRouter model")
     OpenRouterClient.validate_reasoning_effort(model_info, config.reasoning_effort)
     cases = generate_cases(config.depths, config.samples_per_class, config.seed)
     dataset_payload = {
@@ -1340,9 +1354,8 @@ def create_dry_run_plan(
         "cases": [_case_record(case) for case in cases],
     }
     return {
-        "display_model": config.display_model,
-        "requested_model": config.requested_model,
-        "model_id": model_info.model_id,
+        "model_id": config.model_id,
+        "resolved_model_name": model_info.name,
         "reasoning_effort": config.reasoning_effort,
         "depths": list(config.depths),
         "samples_per_class": config.samples_per_class,

@@ -31,12 +31,24 @@ class LoadModelSpecsTests(unittest.TestCase):
             ],
         )
 
-    def test_preserves_duplicate_model_and_effort_entries(self):
+    def test_rejects_duplicate_model_and_effort_identity(self):
         duplicate = {"model_id": "openai/gpt-6-luna", "reasoning_effort": "low"}
-        self.assertEqual(self._load_document([duplicate, duplicate]), [
-            ModelSpec("openai/gpt-6-luna", "low"),
-            ModelSpec("openai/gpt-6-luna", "low"),
-        ])
+        with self.assertRaisesRegex(ValueError, "duplicate model run identity"):
+            self._load_document([duplicate, duplicate])
+
+    def test_same_model_with_distinct_efforts_is_valid(self):
+        self.assertEqual(
+            self._load_document(
+                [
+                    {"model_id": "openai/gpt-6-luna", "reasoning_effort": "low"},
+                    {"model_id": "openai/gpt-6-luna", "reasoning_effort": "medium"},
+                ]
+            ),
+            [
+                ModelSpec("openai/gpt-6-luna", "low"),
+                ModelSpec("openai/gpt-6-luna", "medium"),
+            ],
+        )
 
     def test_model_spec_is_frozen(self):
         spec = ModelSpec("openai/gpt-6-luna", "low")

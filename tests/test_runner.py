@@ -131,7 +131,7 @@ class RunnerTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.results_dir = Path(self.temp_dir.name) / "results"
         self.model_info = ModelInfo(
-            requested_id="gpt-6-luna",
+            requested_id="openai/gpt-6-luna",
             model_id="openai/gpt-6-luna",
             name="OpenAI: GPT-6 Luna",
             prompt_rate_usd_per_million=Decimal("0.1"),
@@ -141,8 +141,7 @@ class RunnerTests(unittest.TestCase):
             supported_parameters=("reasoning_effort",),
         )
         self.config = RunConfig(
-            requested_model="gpt-6-luna",
-            display_model="gpt-6-luna-low",
+            model_id="openai/gpt-6-luna",
             reasoning_effort="low",
             depths=(4,),
             samples_per_class=1,
@@ -181,7 +180,8 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(summary["provider_cost_total"], Decimal("0.00002"))
         self.assertIn("OpenAI", summary["provider_routes"])
         leaderboard = render_leaderboard([summary])
-        self.assertIn("gpt-6-luna-low", leaderboard)
+        self.assertIn("openai/gpt-6-luna", leaderboard)
+        self.assertIn("| low |", leaderboard)
         self.assertIn("Correct", leaderboard)
         self.assertIn("Primes correctly identified", leaderboard)
         self.assertIn("Provider-reported cost", leaderboard)
@@ -411,7 +411,7 @@ class RunnerTests(unittest.TestCase):
             results_dir=self.results_dir,
         )
         other_info = ModelInfo(
-            requested_id="other-model",
+            requested_id="provider/other-model",
             model_id="provider/other-model",
             name="Other",
             prompt_rate_usd_per_million=Decimal("1"),
@@ -423,8 +423,7 @@ class RunnerTests(unittest.TestCase):
         other_config = RunConfig(
             **{
                 **self.config.__dict__,
-                "requested_model": "other-model",
-                "display_model": "other-model-medium",
+                "model_id": "provider/other-model",
                 "reasoning_effort": "medium",
             }
         )
@@ -434,9 +433,7 @@ class RunnerTests(unittest.TestCase):
             model_info=other_info,
             results_dir=self.results_dir,
         )
-        replicate_config = RunConfig(
-            **{**self.config.__dict__, "display_model": "gpt-6-luna-low-repeat"}
-        )
+        replicate_config = RunConfig(**self.config.__dict__)
         replicate = run_new(
             client=FakeClient(),
             config=replicate_config,
@@ -456,13 +453,15 @@ class RunnerTests(unittest.TestCase):
         ]
         leaderboard = render_leaderboard(summaries)
         self.assertEqual(leaderboard.count("## Dataset"), 1)
-        self.assertIn("gpt-6-luna-low", leaderboard)
-        self.assertIn("other-model-medium", leaderboard)
+        self.assertIn("openai/gpt-6-luna", leaderboard)
+        self.assertIn("provider/other-model", leaderboard)
+        self.assertIn("| low |", leaderboard)
+        self.assertIn("| medium |", leaderboard)
         self.assertIn("| Effort | Run |", leaderboard)
         self.assertIn(first["run_id"][:8], leaderboard)
         self.assertIn(second["run_id"][:8], leaderboard)
         self.assertIn(replicate["run_id"][:8], leaderboard)
-        self.assertIn("gpt-6-luna-low-repeat", leaderboard)
+        self.assertEqual(leaderboard.count("openai/gpt-6-luna"), 6)
 
 
 if __name__ == "__main__":

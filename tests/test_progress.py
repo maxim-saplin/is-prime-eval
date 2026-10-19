@@ -9,12 +9,13 @@ class ProgressReporterTests(unittest.TestCase):
     def test_prints_elapsed_eta_output_rate_and_per_model_name(self):
         output = io.StringIO()
         reporter = ProgressReporter(stream=output)
-        reporter.register_model("gpt-6-luna-low", 10)
+        reporter.register_model("openai/gpt-6-luna", "low", 10)
         time.sleep(0.01)
         reporter(
             {
                 "event": "case_finished",
-                "display_model": "gpt-6-luna-low",
+                "model_id": "openai/gpt-6-luna",
+                "reasoning_effort": "low",
                 "case_id": "d4-1009",
                 "outcome": "correct",
                 "completion_tokens": 50,
@@ -22,7 +23,7 @@ class ProgressReporterTests(unittest.TestCase):
             }
         )
         text = output.getvalue()
-        self.assertIn("gpt-6-luna-low", text)
+        self.assertIn("model_id=openai/gpt-6-luna | reasoning_effort=low", text)
         self.assertIn("1/10", text)
         self.assertIn("elapsed", text)
         self.assertIn("ETA", text)
@@ -33,11 +34,12 @@ class ProgressReporterTests(unittest.TestCase):
     def test_failure_usage_is_included_in_output_token_rate(self):
         output = io.StringIO()
         reporter = ProgressReporter(stream=output)
-        reporter.register_model("model-low", 2)
+        reporter.register_model("provider/model", "low", 2)
         reporter(
             {
                 "event": "attempt_failed",
-                "display_model": "model-low",
+                "model_id": "provider/model",
+                "reasoning_effort": "low",
                 "case_id": "d4-1009",
                 "attempt_number": 1,
                 "max_attempts": 3,
@@ -51,11 +53,12 @@ class ProgressReporterTests(unittest.TestCase):
     def test_heartbeat_reports_a_slow_nonstreaming_request(self):
         output = io.StringIO()
         reporter = ProgressReporter(stream=output, heartbeat_interval=0.1)
-        reporter.register_model("slow-model", 2)
+        reporter.register_model("provider/slow-model", "medium", 2)
         reporter(
             {
                 "event": "attempt_started",
-                "display_model": "slow-model",
+                "model_id": "provider/slow-model",
+                "reasoning_effort": "medium",
                 "case_id": "d10-1000000007",
                 "attempt_number": 1,
                 "max_attempts": 3,

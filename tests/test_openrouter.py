@@ -100,7 +100,7 @@ class OpenRouterClientTests(unittest.TestCase):
 
         client = OpenRouterClient("test-secret", opener=opener)
         with self.assertRaises(OpenRouterError) as caught:
-            client.complete("openai/gpt-6-luna", "test")
+            client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertEqual(caught.exception.status_code, 503)
         self.assertTrue(caught.exception.retryable)
         self.assertTrue(caught.exception.may_have_been_billed)
@@ -132,7 +132,7 @@ class OpenRouterClientTests(unittest.TestCase):
 
         client = OpenRouterClient("test-secret", opener=opener)
         with self.assertRaises(OpenRouterError) as caught:
-            client.complete("openai/gpt-6-luna", "test")
+            client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertEqual(caught.exception.response_payload, payload)
         self.assertNotIn("test-secret", repr(caught.exception.response_payload))
 
@@ -141,7 +141,7 @@ class OpenRouterClientTests(unittest.TestCase):
             return FakeHTTPResponse({"id": "gen-empty", "usage": {"prompt_tokens": 4}})
 
         client = OpenRouterClient("test-secret", opener=opener)
-        response = client.complete("openai/gpt-6-luna", "test")
+        response = client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertEqual(response["id"], "gen-empty")
         self.assertNotIn("choices", response)
 
@@ -157,7 +157,7 @@ class OpenRouterClientTests(unittest.TestCase):
 
         client = OpenRouterClient("test-secret", opener=opener)
         with self.assertRaises(OpenRouterError) as caught:
-            client.complete("openai/gpt-6-luna", "test")
+            client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertTrue(caught.exception.retryable)
         self.assertEqual(caught.exception.response_payload, payload)
         self.assertNotIn("test-secret", repr(caught.exception.response_payload))

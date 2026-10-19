@@ -31,7 +31,7 @@ Sort complete runs by **Correct %**. Equal numbers of prime and composite cases 
 
 Put a short benchmark summary above the tables: dataset/prompt version, digits 4–10, cases per digit, seed or dataset ID, no-tools setting, and run date. Keep the main results in familiar terms:
 
-1. **Model results**, sorted by Correct %: model (requested ID and route if stable), scheduled trials, **Correct # (%)**, **Incorrect # (%)**, and the wrong-label / invalid-response / no-response counts that make up Incorrect.
+1. **Model results**, sorted by Correct %: **Model ID**, **Reasoning effort**, provider route, run ID, scheduled trials, **Correct # (%)**, **Incorrect # (%)**, and the wrong-label / invalid-response / no-response counts that make up Incorrect.
 2. **Results by digit depth:** one row per model and depth, with trials, Correct # (%), Incorrect # (%), **Primes correctly identified: X/Y**, and **Non-primes correctly identified: X/Y**. A full run has 20 cases per depth by default.
 3. **Cost per run:** prompt/completion token totals, **Provider-reported cost (USD)**, and **Estimated cost without cache discounts (USD)**. Show how many request costs were reported; if a dollar value is unknown or partial, label it rather than showing `$0`.
 
@@ -39,7 +39,7 @@ Percentages use all scheduled items, including invalid/no-response items in Inco
 
 ## OpenRouter and cost accounting (required from the first run)
 
-Use a small OpenRouter adapter over its OpenAI-compatible chat-completions API, authenticated by `OPENROUTER_API_KEY`. Require a model ID on the CLI. Avoid adding LiteLLM or a provider registry at this stage so OpenRouter's usage, cost and routing metadata remain visible. Record requested model and returned model/provider route when available. Keep tests offline by injecting/mocking the adapter.
+Use a small OpenRouter adapter over its OpenAI-compatible chat-completions API, authenticated by `OR_KEY` from `.env` (with `OPENROUTER_API_KEY` as fallback). Require a fully qualified model ID and an explicit reasoning effort. Avoid adding LiteLLM or a provider registry at this stage so OpenRouter's usage, cost and routing metadata remain visible. Record the configured model ID and returned/served model ID and provider route when available. Keep tests offline by injecting/mocking the adapter.
 
 Store **two distinct dollar metrics per API attempt**; never merge them into a generic `cost` field:
 
@@ -59,7 +59,7 @@ Keep the implementation small and split only at useful test seams:
 - `cases.py`: seeded balanced case generation and exact labels.
 - `prompt.py` / `parse.py`: fixed prompt and deterministic label parser.
 - `openrouter.py`: one API adapter, including usage, cost, route and error extraction.
-- `runner.py` / `run.py`: CLI, sequential requests within each model, bounded retries/resume, and bounded parallel execution across model qualifiers.
+- `runner.py` / `run.py`: CLI, sequential requests within each model, bounded retries/resume, and bounded parallel execution from an explicit JSON list of `{model_id, reasoning_effort}` settings.
 - `progress.py` / `multi_run.py`: per-model progress, elapsed time, ETA and observed completion tokens/second; separate batch elapsed time.
 - `report.py`: summaries derived from saved results, without re-querying models.
 - `tests/`: offline tests with a fake OpenRouter response; no API key/network needed.
@@ -70,7 +70,7 @@ Write an append-only JSONL event ledger and hold an OS advisory lock for the ful
 
 1. Implement and test the benchmark contract: depth ranges, seeded balanced/deduplicated cases, exact labels, prompt and parser behavior.
 2. Add the OpenRouter adapter and both cost paths. Mock responses with/without usage, reported cost, cache details, model routing and failures; test the normalized-cost formula and missing-data behavior.
-3. Add the runner CLI, attempt-level JSONL logging, retries, resume, per-model progress/ETA/token throughput, and repeatable model qualifiers. Parallelize model runs only; keep each model's requests sequential and concurrency bounded.
+3. Add the runner CLI, attempt-level JSONL logging, retries, resume, per-model progress/ETA/token throughput, and explicit model-ID/effort configuration. Parallelize model runs only; keep each model's requests sequential and concurrency bounded. Never infer an effort suffix from a model ID or silently default the effort.
 4. Add the text summary, README usage/API-key guidance, and an opt-in live smoke test (small case count, one model).
 
 MVP is ready when offline tests verify generation, parsing/scoring, retry/resume, JSONL replay, both cost calculations, torn-tail recovery, an interrupted attempt with unknown spend, per-model progress, parallel model orchestration, shared case hashes, and exclusive ledger ownership. Tests must not call the real API or require a key. Progress must count only persisted terminal cases, report observed completion tokens per wall-clock elapsed time (not streaming token speed), and keep per-model elapsed/ETA separate from batch elapsed. Reports keep both dollar totals distinct with explicit missing-cost coverage.

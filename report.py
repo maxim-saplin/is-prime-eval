@@ -249,9 +249,7 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
         "ledger_path": str(ledger),
         "manifest_path": str(manifest_path),
         "run_id": manifest.get("run_id"),
-        "display_model": manifest.get("display_model", "unknown"),
-        "requested_model": model.get("requested_id"),
-        "model_id": model.get("model_id"),
+        "model_id": model.get("model_id") or model.get("requested_id") or manifest.get("display_model", "unknown"),
         "reasoning_effort": model.get("reasoning_effort"),
         "dataset_id": dataset.get("dataset_id"),
         "prompt_version": manifest.get("prompt", {}).get("version"),
@@ -292,12 +290,9 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
     }
 
 
-def _model_label(summary: Mapping[str, Any]) -> str:
-    model = str(summary["display_model"])
+def _route_label(summary: Mapping[str, Any]) -> str:
     routes = summary.get("provider_routes", [])
-    if routes:
-        return f"{model} ({', '.join(routes)})"
-    return model
+    return ", ".join(routes) if routes else "unknown"
 
 
 def _incorrect_breakdown(counts: Mapping[str, int]) -> str:
@@ -347,7 +342,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
             (run for run in group if run["complete"]),
             key=lambda run: (
                 -run["counts"]["correct"] / max(1, run["scheduled"]),
-                run["display_model"].casefold(),
+                run["model_id"].casefold(),
                 str(run.get("reasoning_effort") or ""),
                 str(run.get("run_id") or ""),
             ),
@@ -358,29 +353,29 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                 [
                     "### Model results",
                     "",
-                    "| Rank | Model | Effort | Run | Answered / scheduled | Correct | Incorrect | Incorrect reasons |",
-                    "|---:|---|---|---|---:|---:|---:|---|",
+                    "| Rank | Model ID | Effort | Provider route | Run | Answered / scheduled | Correct | Incorrect | Incorrect reasons |",
+                    "|---:|---|---|---|---|---:|---:|---:|---|",
                 ]
             )
             for rank, run in enumerate(complete_runs, start=1):
                 counts = run["counts"]
                 total = run["scheduled"]
                 lines.append(
-                    f"| {rank} | {_model_label(run)} | {run.get('reasoning_effort') or 'default'} | "
-                    f"{str(run.get('run_id') or '')[:8]} | "
+                    f"| {rank} | {run['model_id']} | {run.get('reasoning_effort') or 'unknown'} | "
+                    f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | "
                     f"{counts['answered_cases']}/{total} | "
                     f"{_percentage(counts['correct'], total)} | "
                     f"{_percentage(counts['incorrect'], total)} | "
                     f"{_incorrect_breakdown(counts)} |"
                 )
-            lines.extend(["", "### Results by digit", "", "| Model | Effort | Run | Digits | Correct | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |", "|---|---|---|---:|---:|---:|---:|---:|---:|"])
+            lines.extend(["", "### Results by digit", "", "| Model ID | Effort | Run | Digits | Correct | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |", "|---|---|---|---:|---:|---:|---:|---:|---:|"])
             for run in complete_runs:
                 for depth in run["depths"]:
                     cell = run["by_depth"][depth]
                     scheduled = cell["scheduled"]
                     incorrect = cell["incorrect"]
                     lines.append(
-                        f"| {_model_label(run)} | {run.get('reasoning_effort') or 'default'} | "
+                        f"| {run['model_id']} | {run.get('reasoning_effort') or 'unknown'} | "
                         f"{str(run.get('run_id') or '')[:8]} | {depth} | "
                         f"{_percentage(cell['correct'], scheduled)} | "
                         f"{_percentage(incorrect, scheduled)} | "
@@ -393,14 +388,14 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                     "",
                     "### Cost per run",
                     "",
-                    "| Model | Effort | Run | Prompt / completion tokens | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
-                    "|---|---|---|---:|---:|---:|",
+                    "| Model ID | Effort | Provider route | Run | Prompt / completion tokens | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
+                    "|---|---|---|---|---:|---:|---:|",
                 ]
             )
             for run in complete_runs:
                 lines.append(
-                    f"| {_model_label(run)} | {run.get('reasoning_effort') or 'default'} | "
-                    f"{str(run.get('run_id') or '')[:8]} | "
+                    f"| {run['model_id']} | {run.get('reasoning_effort') or 'unknown'} | "
+                    f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | "
                     f"{run['prompt_tokens']:,} / {run['completion_tokens']:,} "
                     f"({run['token_usage_known_attempts']}/{run['attempt_count']} attempts with token counts) | "
                     f"{run['provider_cost_cell']} | {run['normalized_cost_cell']} |"
@@ -411,15 +406,15 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                     "",
                     "### Incomplete runs (not ranked)",
                     "",
-                    "| Model | Effort | Run | Scheduled | Correct | Incorrect terminal items | Attempted cases | Answered | Terminal no-response | Pending | Never attempted | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
-                    "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+                    "| Model ID | Effort | Provider route | Run | Scheduled | Correct | Incorrect terminal items | Attempted cases | Answered | Terminal no-response | Pending | Never attempted | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
+                    "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
                 ]
             )
             for run in incomplete_runs:
                 counts = run["counts"]
                 lines.append(
-                    f"| {_model_label(run)} | {run.get('reasoning_effort') or 'default'} | "
-                    f"{str(run.get('run_id') or '')[:8]} | {run['scheduled']} | "
+                    f"| {run['model_id']} | {run.get('reasoning_effort') or 'unknown'} | "
+                    f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | {run['scheduled']} | "
                     f"{_percentage(counts['correct'], run['scheduled'])} | "
                     f"{_percentage(counts['incorrect'], run['scheduled'])} | "
                     f"{counts['attempted_cases']} | {counts['answered_cases']} | "

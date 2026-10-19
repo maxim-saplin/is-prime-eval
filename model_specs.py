@@ -61,6 +61,7 @@ def load_model_specs(path: str | Path) -> list[ModelSpec]:
         raise ValueError("model specs array must not be empty")
 
     specs: list[ModelSpec] = []
+    identities: set[tuple[str, str]] = set()
     for index, row in enumerate(data):
         if not isinstance(row, dict):
             raise ValueError(f"model_specs[{index}] must be an object")
@@ -74,12 +75,18 @@ def load_model_specs(path: str | Path) -> list[ModelSpec]:
             if extra:
                 details.append(f"unexpected fields: {', '.join(extra)}")
             raise ValueError(f"model_specs[{index}] has invalid fields ({'; '.join(details)})")
-        specs.append(
-            ModelSpec(
-                model_id=_validate_model_id(row["model_id"], index=index),
-                reasoning_effort=_validate_effort(
-                    row["reasoning_effort"], index=index
-                ),
-            )
+        spec = ModelSpec(
+            model_id=_validate_model_id(row["model_id"], index=index),
+            reasoning_effort=_validate_effort(
+                row["reasoning_effort"], index=index
+            ),
         )
+        identity = (spec.model_id, spec.reasoning_effort)
+        if identity in identities:
+            raise ValueError(
+                f"duplicate model run identity at model_specs[{index}]: "
+                f"{spec.model_id} with reasoning_effort={spec.reasoning_effort}"
+            )
+        identities.add(identity)
+        specs.append(spec)
     return specs

@@ -90,9 +90,9 @@ class InterruptFakeClient:
 
 
 class MultiRunTests(unittest.TestCase):
-    def _spec(self, requested, model_id, alias):
+    def _spec(self, model_id, effort):
         model = ModelInfo(
-            requested_id=requested,
+            requested_id=model_id,
             model_id=model_id,
             name=model_id,
             prompt_rate_usd_per_million=Decimal("0.1"),
@@ -102,9 +102,8 @@ class MultiRunTests(unittest.TestCase):
             supported_parameters=("reasoning_effort",),
         )
         config = RunConfig(
-            requested_model=requested,
-            display_model=alias,
-            reasoning_effort="low",
+            model_id=model_id,
+            reasoning_effort=effort,
             depths=(4,),
             samples_per_class=1,
             seed=2026,
@@ -118,8 +117,8 @@ class MultiRunTests(unittest.TestCase):
     def test_models_run_in_parallel_share_same_cases_and_report_progress_separately(self):
         metrics = ParallelMetrics()
         specs = [
-            self._spec("model-a", "provider/model-a", "model-a-low"),
-            self._spec("model-b", "provider/model-b", "model-b-low"),
+            self._spec("provider/model-a", "low"),
+            self._spec("provider/model-b", "low"),
         ]
         output = io.StringIO()
         reporter = ProgressReporter(stream=output)
@@ -142,8 +141,8 @@ class MultiRunTests(unittest.TestCase):
             self.assertEqual(len({row["result"]["ledger_path"] for row in results}), 2)
             manifests = [json.loads(Path(row["result"]["manifest_path"]).read_text()) for row in results]
             self.assertEqual(manifests[0]["dataset"]["dataset_id"], manifests[1]["dataset"]["dataset_id"])
-            self.assertIn("model-a-low", output.getvalue())
-            self.assertIn("model-b-low", output.getvalue())
+            self.assertIn("model_id=provider/model-a | reasoning_effort=low", output.getvalue())
+            self.assertIn("model_id=provider/model-b | reasoning_effort=low", output.getvalue())
             self.assertIn("ETA", output.getvalue())
             self.assertIn("tok/s", output.getvalue())
             self.assertIn("batch elapsed", output.getvalue())
@@ -151,8 +150,8 @@ class MultiRunTests(unittest.TestCase):
     def test_ctrl_c_stops_queued_models_and_leaves_resumable_ledgers(self):
         metrics = InterruptMetrics()
         specs = [
-            self._spec("model-a", "provider/model-a", "model-a-low"),
-            self._spec("model-b", "provider/model-b", "model-b-low"),
+            self._spec("provider/model-a", "low"),
+            self._spec("provider/model-b", "low"),
         ]
         def interrupt_after_first_dispatch(futures):
             if not metrics.started.wait(timeout=3):

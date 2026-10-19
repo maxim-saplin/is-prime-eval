@@ -1,4 +1,4 @@
-"""Thread-safe per-model progress, elapsed/ETA and output-token throughput."""
+"""Thread-safe progress, elapsed/ETA and observed completion-token throughput."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ import sys
 import threading
 import time
 from typing import Any, TextIO
+
+ProgressKey = tuple[str, str]  # (fully qualified model ID, explicit effort)
 
 
 def _duration(seconds: float) -> str:
@@ -33,11 +35,12 @@ class _ModelProgress:
 
 
 class ProgressReporter:
-    """Write independent per-model progress lines and a separate batch clock.
+    """Print separate model-ID/effort progress lines and a batch clock.
 
-    OpenRouter calls are non-streaming: completion tokens are added to the
-    observed rate only after usage arrives. Token counts include reasoning when
-    it is part of the provider's completion total.
+    Requests are non-streaming: reported completion tokens (including reasoning
+    tokens when present) become available only after a response. The displayed
+    token rate is therefore observed completion tokens divided by elapsed wall
+    time, not the provider's instantaneous generation speed.
     """
 
     def __init__(
@@ -49,10 +52,10 @@ class ProgressReporter:
         # Keep progress on stderr so stdout remains suitable for piping reports.
         self.stream = stream or sys.stderr
         self._lock = threading.Lock()
-        self._models: dict[str, _ModelProgress] = {}
+        self._models: dict[ProgressKey, _ModelProgress] = {}
         self._batch_started = time.monotonic()
         self._batch_total: int | None = None
-        self._finished_models: set[str] = set()
+        self._finished_models: set[ProgressKey] = set()
         self._heartbeat_interval = max(0.1, heartbeat_interval)
         self._heartbeat_stop = threading.Event()
         self._heartbeat_thread: threading.Thread | None = None
@@ -77,17 +80,22 @@ class ProgressReporter:
 
     def register_model(
         self,
-        model: str,
+        model_id: str,
+        reasoning_effort: str,
         total: int,
         *,
         initial_completed: int = 0,
         initial_correct: int = 0,
         initial_incorrect: int = 0,
     ) -> None:
+        key = (model_id, reasoning_effort)
         with self._lock:
-            if model in self._models:
-                raise ValueError(f"duplicate progress display name: {model}")
-            self._models[model] = _ModelProgress(
+            if key in self._models:
+                raise ValueError(
+                    f"duplicate progress identity: model_id={model_id}, "
+                    f"reasoning_effort={reasoning_effort}"
+                )
+            self._models[key] = _ModelProgress(
                 total=total,
                 started_at=time.monotonic(),
                 initial_completed=initial_completed,
@@ -95,7 +103,7 @@ class ProgressReporter:
                 correct=initial_correct,
                 incorrect=initial_incorrect,
             )
-            self._print_locked(model, self._models[model], "starting")
+            self._print_locked(key, self._models[key], "starting")
 
     def _start_heartbeat_locked(self) -> None:
         if self._heartbeat_thread is None or not self._heartbeat_thread.is_alive():
@@ -110,24 +118,27 @@ class ProgressReporter:
     def _heartbeat_loop(self) -> None:
         while not self._heartbeat_stop.wait(self._heartbeat_interval):
             with self._lock:
-                for model, state in self._models.items():
-                    if state.active_case is None or model in self._finished_models:
+                for key, state in self._models.items():
+                    if state.active_case is None or key in self._finished_models:
                         continue
                     attempt = state.active_attempt or 1
                     maximum = state.active_max_attempts or 1
                     self._print_locked(
-                        model,
+                        key,
                         state,
                         f"{state.active_status} {state.active_case} attempt {attempt}/{maximum}",
                     )
 
-    def model_finished(self, model: str, *, success: bool) -> None:
+    def model_finished(
+        self, model_id: str, reasoning_effort: str, *, success: bool
+    ) -> None:
         """Report batch elapsed separately when one model worker exits."""
+        key = (model_id, reasoning_effort)
         with self._lock:
-            if model in self._finished_models:
+            if key in self._finished_models:
                 return
-            self._finished_models.add(model)
-            model_state = self._models.get(model)
+            self._finished_models.add(key)
+            model_state = self._models.get(key)
             if model_state is not None:
                 model_state.active_case = None
             total = self._batch_total if self._batch_total is not None else len(self._models)
@@ -135,7 +146,8 @@ class ProgressReporter:
             status = "complete" if success else "failed/incomplete"
             print(
                 f"[batch] {len(self._finished_models)}/{total} model runs finished "
-                f"| batch elapsed {elapsed} | {model}: {status}",
+                f"| batch elapsed {elapsed} | model_id={model_id} "
+                f"reasoning_effort={reasoning_effort}: {status}",
                 file=self.stream,
                 flush=True,
             )
@@ -143,13 +155,15 @@ class ProgressReporter:
                 self._heartbeat_stop.set()
 
     def __call__(self, event: dict[str, Any]) -> None:
-        model = str(event.get("display_model", "model"))
+        model_id = str(event.get("model_id", "model"))
+        effort = str(event.get("reasoning_effort", ""))
+        key = (model_id, effort)
         with self._lock:
-            state = self._models.get(model)
+            state = self._models.get(key)
             if state is None:
                 total = int(event.get("total_cases", 0))
                 state = _ModelProgress(total=total, started_at=time.monotonic())
-                self._models[model] = state
+                self._models[key] = state
 
             event_type = event.get("event")
             if event_type == "run_progress_init":
@@ -160,8 +174,9 @@ class ProgressReporter:
                 state.incorrect = int(event.get("incorrect", 0))
                 state.started_at = time.monotonic()
                 state.active_case = None
-                self._print_locked(model, state, "run state loaded")
+                self._print_locked(key, state, "run state loaded")
                 return
+
             if event_type == "attempt_started":
                 state.active_case = str(event.get("case_id", "request"))
                 state.active_attempt = int(event.get("attempt_number") or 1)
@@ -169,7 +184,7 @@ class ProgressReporter:
                 state.active_status = "waiting for response to"
                 self._start_heartbeat_locked()
                 self._print_locked(
-                    model,
+                    key,
                     state,
                     f"request {state.active_attempt}/{state.active_max_attempts} started for {state.active_case}",
                 )
@@ -177,7 +192,7 @@ class ProgressReporter:
 
             if event_type == "attempt_cancelled_before_dispatch":
                 state.active_case = None
-                self._print_locked(model, state, "cancelled before dispatch")
+                self._print_locked(key, state, "cancelled before dispatch")
                 return
 
             if event_type == "attempt_failed":
@@ -191,7 +206,7 @@ class ProgressReporter:
                 state.active_attempt = int(attempt) if isinstance(attempt, int) else None
                 state.active_max_attempts = int(total_attempts) if isinstance(total_attempts, int) else None
                 state.active_status = "retrying after failure"
-                self._print_locked(model, state, f"attempt {attempt}/{total_attempts} failed: {reason}")
+                self._print_locked(key, state, f"attempt {attempt}/{total_attempts} failed: {reason}")
                 return
 
             if event_type != "case_finished":
@@ -212,9 +227,10 @@ class ProgressReporter:
                 state.correct += 1
             elif outcome in {"wrong_label", "invalid_response", "no_response"}:
                 state.incorrect += 1
-            self._print_locked(model, state, outcome)
+            self._print_locked(key, state, outcome)
 
-    def _print_locked(self, model: str, state: _ModelProgress, status: str) -> None:
+    def _print_locked(self, key: ProgressKey, state: _ModelProgress, status: str) -> None:
+        model_id, effort = key
         elapsed = max(0.0, time.monotonic() - state.started_at)
         completed_this_session = max(0, state.completed - state.initial_completed)
         remaining_cases = max(0, state.total - state.completed)
@@ -226,7 +242,8 @@ class ProgressReporter:
         token_rate = state.output_tokens / elapsed if elapsed > 0 else 0.0
         percent = (100.0 * state.completed / state.total) if state.total else 0.0
         print(
-            f"[{model}] {state.completed}/{state.total} ({percent:.1f}%) "
+            f"[model_id={model_id} | reasoning_effort={effort}] "
+            f"{state.completed}/{state.total} ({percent:.1f}%) "
             f"elapsed {_duration(elapsed)} ETA {eta} "
             f"observed output {token_rate:.1f} tok/s "
             f"correct {state.correct}, incorrect {state.incorrect} [{status}]",
