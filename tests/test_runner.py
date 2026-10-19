@@ -10,7 +10,7 @@ import runner as runner_module
 from cases import is_prime
 from openrouter import ModelInfo, OpenRouterError
 from report import render_leaderboard, summarize_run
-from runner import RunConfig, resume_run, run_new
+from runner import RunConfig, _new_ledger_path, resume_run, run_new
 
 
 class FakeClient:
@@ -154,6 +154,42 @@ class RunnerTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp_dir.cleanup()
+
+    def test_user_model_id_and_effort_are_kept_separate_and_markdown_escaped(self):
+        unusual_info = ModelInfo(
+            requested_id="provider/model|variant",
+            model_id="provider/model|variant",
+            name="Fixture model",
+            prompt_rate_usd_per_million=Decimal("0.1"),
+            completion_rate_usd_per_million=Decimal("0.5"),
+            pricing_source="fixture",
+            pricing_retrieved_at="2026-10-19T00:00:00Z",
+            supported_parameters=("reasoning_effort",),
+        )
+        unusual_config = RunConfig(
+            model_id="provider/model|variant",
+            reasoning_effort="custom|effort",
+            depths=(4,),
+            samples_per_class=1,
+            seed=77,
+            max_attempts=1,
+            retry_delay_seconds=0,
+            timeout_seconds=2,
+            max_completion_tokens=32,
+        )
+        client = FakeClient()
+        result = run_new(
+            client=client,
+            config=unusual_config,
+            model_info=unusual_info,
+            results_dir=self.results_dir,
+        )
+        self.assertTrue(result["complete"])
+        self.assertEqual(client.calls[0]["reasoning_effort"], "custom|effort")
+        summary = summarize_run(result["ledger_path"])
+        leaderboard = render_leaderboard([summary])
+        self.assertIn("provider/model\\|variant", leaderboard)
+        self.assertIn("custom\\|effort", leaderboard)
 
     def test_success_persists_manifest_results_and_clear_leaderboard(self):
         client = FakeClient()
@@ -310,6 +346,15 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["incorrect"], 2)
         self.assertEqual(summary["provider_cost_known_attempts"], 2)
         self.assertEqual(summary["provider_cost_total"], Decimal("0.00006"))
+
+    def test_arbitrary_effort_cannot_escape_results_dir_or_collide_after_slugging(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "results"
+            efforts = ("custom/../../outside", "custom/level", "custom-level")
+            paths = [_new_ledger_path(root, "openai/gpt-6-luna", effort) for effort in efforts]
+            self.assertTrue(all(path.parent == root.resolve() for path in paths))
+            self.assertEqual(len({path.name for path in paths}), len(paths))
+            self.assertTrue(all("/" not in path.name and "\\" not in path.name for path in paths))
 
     def test_cancel_after_attempt_start_prevents_http_dispatch_and_marks_case_unattempted(self):
         client = FakeClient()

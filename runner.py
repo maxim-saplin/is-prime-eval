@@ -430,9 +430,15 @@ def _validate_resume_overrides(
 
 
 def _new_ledger_path(results_dir: Path, model_id: str, reasoning_effort: str) -> Path:
+    root = results_dir.resolve()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     model_slug = _safe_slug(model_id)
-    return results_dir / f"{model_slug}__effort-{reasoning_effort}_{stamp}_{uuid4().hex[:8]}.jsonl"
+    effort_slug = _safe_slug(reasoning_effort)[:48] or "effort"
+    effort_hash = hashlib.sha256(reasoning_effort.encode("utf-8")).hexdigest()[:10]
+    path = root / f"{model_slug}__effort-{effort_slug}-{effort_hash}_{stamp}_{uuid4().hex[:8]}.jsonl"
+    if path.parent != root:
+        raise ValueError("generated run ledger path escaped the results directory")
+    return path
 
 
 def _extract_response_text(response: Mapping[str, Any]) -> str:

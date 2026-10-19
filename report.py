@@ -290,9 +290,15 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
     }
 
 
+def _markdown_cell(value: Any) -> str:
+    """Escape user/provider-controlled values before inserting them in a table."""
+    text = str(value)
+    return text.replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+
 def _route_label(summary: Mapping[str, Any]) -> str:
     routes = summary.get("provider_routes", [])
-    return ", ".join(routes) if routes else "unknown"
+    return _markdown_cell(", ".join(routes) if routes else "unknown")
 
 
 def _incorrect_breakdown(counts: Mapping[str, int]) -> str:
@@ -361,7 +367,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                 counts = run["counts"]
                 total = run["scheduled"]
                 lines.append(
-                    f"| {rank} | {run['model_id']} | {run.get('reasoning_effort') or 'unknown'} | "
+                    f"| {rank} | {_markdown_cell(run['model_id'])} | {_markdown_cell(run.get('reasoning_effort') or 'unknown')} | "
                     f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | "
                     f"{counts['answered_cases']}/{total} | "
                     f"{_percentage(counts['correct'], total)} | "
@@ -375,7 +381,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                     scheduled = cell["scheduled"]
                     incorrect = cell["incorrect"]
                     lines.append(
-                        f"| {run['model_id']} | {run.get('reasoning_effort') or 'unknown'} | "
+                        f"| {_markdown_cell(run['model_id'])} | {_markdown_cell(run.get('reasoning_effort') or 'unknown')} | "
                         f"{str(run.get('run_id') or '')[:8]} | {depth} | "
                         f"{_percentage(cell['correct'], scheduled)} | "
                         f"{_percentage(incorrect, scheduled)} | "
@@ -394,7 +400,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
             )
             for run in complete_runs:
                 lines.append(
-                    f"| {run['model_id']} | {run.get('reasoning_effort') or 'unknown'} | "
+                    f"| {_markdown_cell(run['model_id'])} | {_markdown_cell(run.get('reasoning_effort') or 'unknown')} | "
                     f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | "
                     f"{run['prompt_tokens']:,} / {run['completion_tokens']:,} "
                     f"({run['token_usage_known_attempts']}/{run['attempt_count']} attempts with token counts) | "
@@ -413,7 +419,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
             for run in incomplete_runs:
                 counts = run["counts"]
                 lines.append(
-                    f"| {run['model_id']} | {run.get('reasoning_effort') or 'unknown'} | "
+                    f"| {_markdown_cell(run['model_id'])} | {_markdown_cell(run.get('reasoning_effort') or 'unknown')} | "
                     f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | {run['scheduled']} | "
                     f"{_percentage(counts['correct'], run['scheduled'])} | "
                     f"{_percentage(counts['incorrect'], run['scheduled'])} | "

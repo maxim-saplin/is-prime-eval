@@ -106,6 +106,23 @@ class OpenRouterClientTests(unittest.TestCase):
         self.assertTrue(caught.exception.may_have_been_billed)
         self.assertNotIn("test-secret", str(caught.exception))
 
+    def test_effort_value_is_passed_through_without_a_local_level_allowlist(self):
+        captured = {}
+
+        def opener(request, timeout):
+            captured["body"] = json.loads(request.data)
+            return FakeHTTPResponse(
+                {"id": "gen-high", "choices": [{"message": {"content": "PRIME"}}]}
+            )
+
+        client = OpenRouterClient("test-secret", opener=opener)
+        client.complete(
+            "openai/gpt-6-luna",
+            "Is 101 prime?",
+            reasoning_effort="high",
+        )
+        self.assertEqual(captured["body"]["reasoning_effort"], "high")
+
     def test_generation_details_uses_encoded_identifier(self):
         captured = {}
 
