@@ -1,0 +1,1 @@
+If you are pi - use team mode, read PI_TEAM.md
