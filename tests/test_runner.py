@@ -249,6 +249,9 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(len(client.calls), 2)
         summary = summarize_run(result["ledger_path"])
         self.assertEqual(summary["counts"]["invalid"], 2)
+        self.assertEqual(summary["counts"]["truncated"], 2)
+        self.assertEqual(summary["counts"]["other_invalid"], 0)
+        self.assertEqual(summary["by_depth"][4]["truncated"], 2)
 
     def test_http_200_without_choices_is_invalid_and_not_retried(self):
         client = NoChoicesClient()

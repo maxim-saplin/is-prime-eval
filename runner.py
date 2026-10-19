@@ -517,6 +517,17 @@ def _record_response(
     }
     parsed_label = None if truncated else parse_response(raw_response)
     correct = parsed_label == case.label if parsed_label is not None else False
+    message = first_choice.get("message") if isinstance(first_choice, Mapping) else None
+    refusal = message.get("refusal") if isinstance(message, Mapping) else None
+    invalid_reason = (
+        "completion_truncated"
+        if truncated
+        else "refusal"
+        if parsed_label is None and refusal
+        else "unparseable_response"
+        if parsed_label is None
+        else None
+    )
     outcome = (
         "invalid_response"
         if parsed_label is None
@@ -577,7 +588,7 @@ def _record_response(
             "parsed_label": parsed_label,
             "correct": correct,
             "outcome": outcome,
-            "invalid_reason": "completion_truncated" if truncated else None,
+            "invalid_reason": invalid_reason,
             "finish_reason": finish_reason,
             "native_finish_reason": native_finish_reason,
             "usage": usage,

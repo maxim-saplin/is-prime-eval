@@ -115,6 +115,7 @@ def _case_outcomes(
                 "terminal": terminal,
                 "attempted": bool(case_attempts),
                 "answered": response is not None,
+                "invalid_reason": response.get("invalid_reason") if response is not None else None,
             }
         )
     complete = all(item["terminal"] for item in outcomes)
@@ -147,10 +148,16 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
         "correct": sum(1 for row in outcomes if row["outcome"] == "correct"),
         "wrong_label": sum(1 for row in outcomes if row["outcome"] == "wrong_label"),
         "invalid": sum(1 for row in outcomes if row["outcome"] == "invalid_response"),
+        "truncated": sum(
+            1 for row in outcomes
+            if row["outcome"] == "invalid_response"
+            and row.get("invalid_reason") == "completion_truncated"
+        ),
         "no_response": sum(1 for row in outcomes if row["outcome"] == "no_response"),
         "pending": sum(1 for row in outcomes if row["outcome"] == "pending"),
         "not_attempted": sum(1 for row in outcomes if row["outcome"] == "not_attempted"),
     }
+    counts["other_invalid"] = counts["invalid"] - counts["truncated"]
     counts["incorrect"] = counts["wrong_label"] + counts["invalid"] + counts["no_response"]
     counts["attempted_cases"] = sum(1 for row in outcomes if row["attempted"])
     counts["answered_cases"] = sum(1 for row in outcomes if row["answered"])
@@ -165,6 +172,7 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
                 "correct": 0,
                 "wrong_label": 0,
                 "invalid": 0,
+                "truncated": 0,
                 "no_response": 0,
                 "pending": 0,
                 "not_attempted": 0,
@@ -182,6 +190,8 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
             cell["wrong_label"] += 1
         elif outcome == "invalid_response":
             cell["invalid"] += 1
+            if row.get("invalid_reason") == "completion_truncated":
+                cell["truncated"] += 1
         elif outcome == "no_response":
             cell["no_response"] += 1
         elif outcome == "pending":
@@ -286,7 +296,8 @@ def _model_label(summary: Mapping[str, Any]) -> str:
 
 def _incorrect_breakdown(counts: Mapping[str, int]) -> str:
     return (
-        f"wrong label {counts['wrong_label']}, invalid {counts['invalid']}, "
+        f"wrong label {counts['wrong_label']}, invalid {counts['invalid']} "
+        f"(truncated {counts['truncated']}, other {counts['other_invalid']}), "
         f"no response {counts['no_response']}"
     )
 
@@ -352,7 +363,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                     f"{_percentage(counts['incorrect'], total)} | "
                     f"{_incorrect_breakdown(counts)} |"
                 )
-            lines.extend(["", "### Results by digit", "", "| Model | Digits | Correct | Incorrect | Primes correctly identified | Non-primes correctly identified |", "|---|---:|---:|---:|---:|---:|"])
+            lines.extend(["", "### Results by digit", "", "| Model | Digits | Correct | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |", "|---|---:|---:|---:|---:|---:|---:|"])
             for run in complete_runs:
                 for depth in run["depths"]:
                     cell = run["by_depth"][depth]
@@ -362,6 +373,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                         f"| {_model_label(run)} | {depth} | "
                         f"{_percentage(cell['correct'], scheduled)} | "
                         f"{_percentage(incorrect, scheduled)} | "
+                        f"{cell['truncated']} | "
                         f"{cell['primes_correct']}/{cell['primes_scheduled']} | "
                         f"{cell['nonprimes_correct']}/{cell['nonprimes_scheduled']} |"
                     )
@@ -403,7 +415,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
     lines.extend(
         [
             "Incorrect includes wrong labels, invalid responses, and retry-exhausted no-response items. "
-            "Invalid and no-response counts are shown separately as reasons. Percentages use all scheduled cases. "
+            "Invalid and no-response counts are shown separately as reasons; truncated is an invalid-response sub-count. Percentages use all scheduled cases. "
             "Costs cover all request attempts; partial/unknown coverage is labeled, never treated as $0.",
             "",
         ]
