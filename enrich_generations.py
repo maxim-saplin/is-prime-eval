@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from costs import decimal_text, estimate_uncached_cost_usd, extract_provider_cost_usd, extract_usage
-from events import append_event, load_events
+from events import append_event, ledger_lock, load_events
 from openrouter import OpenRouterClient, OpenRouterError
 from runner import _manifest_path, _validate_manifest
 from settings import get_openrouter_key, load_dotenv
 
 
-def enrich_ledger(ledger_path: str | Path, client: OpenRouterClient) -> dict[str, int]:
+def _enrich_ledger_unlocked(ledger_path: str | Path, client: OpenRouterClient) -> dict[str, int]:
     ledger = Path(ledger_path).resolve()
     manifest_path = _manifest_path(ledger)
     if not manifest_path.is_file():
@@ -108,6 +108,13 @@ def enrich_ledger(ledger_path: str | Path, client: OpenRouterClient) -> dict[str
         )
         enriched += 1
     return {"enriched": enriched, "failed": failed, "skipped": skipped}
+
+
+def enrich_ledger(ledger_path: str | Path, client: OpenRouterClient) -> dict[str, int]:
+    """Fetch delayed metadata while exclusively owning the ledger."""
+    ledger = Path(ledger_path).resolve()
+    with ledger_lock(ledger):
+        return _enrich_ledger_unlocked(ledger, client)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

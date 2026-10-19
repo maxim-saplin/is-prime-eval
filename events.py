@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -12,6 +14,38 @@ from uuid import uuid4
 
 class LedgerCorruptionError(ValueError):
     """Raised when a complete (newline-terminated) event is invalid JSON."""
+
+
+class LedgerLockedError(OSError):
+    """Raised when another process currently owns a run ledger."""
+
+
+@contextmanager
+def ledger_lock(path: str | Path):
+    """Hold an OS advisory lock for the full run/enrichment mutation window.
+
+    The `.lock` file may remain after exit or a crash; ownership is determined
+    only by `flock`, so stale files never strand a run.
+    """
+    ledger = Path(path)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = Path(f"{ledger}.lock")
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    locked = False
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = True
+        except BlockingIOError:
+            raise LedgerLockedError(f"run ledger is already owned: {ledger}") from None
+        os.ftruncate(fd, 0)
+        os.write(fd, f"pid={os.getpid()}\n".encode("ascii"))
+        os.fsync(fd)
+        yield
+    finally:
+        if locked:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 def _utc_now() -> str:

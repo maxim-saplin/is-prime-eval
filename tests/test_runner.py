@@ -1,6 +1,7 @@
 import json
 from decimal import Decimal
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -310,6 +311,31 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(summary["provider_cost_known_attempts"], 2)
         self.assertEqual(summary["provider_cost_total"], Decimal("0.00006"))
 
+    def test_cancel_after_attempt_start_prevents_http_dispatch_and_marks_case_unattempted(self):
+        client = FakeClient()
+        cancellation = threading.Event()
+
+        def stop_after_durable_start(event):
+            if event.get("event") == "attempt_started":
+                cancellation.set()
+
+        result = run_new(
+            client=client,
+            config=self.config,
+            model_info=self.model_info,
+            results_dir=self.results_dir,
+            on_progress=stop_after_durable_start,
+            cancel_event=cancellation,
+        )
+        self.assertFalse(result["complete"])
+        self.assertEqual(client.calls, [])
+        summary = summarize_run(result["ledger_path"])
+        self.assertEqual(summary["attempt_count"], 0)
+        self.assertEqual(summary["counts"]["attempted_cases"], 0)
+        self.assertEqual(summary["counts"]["not_attempted"], 2)
+        events = [json.loads(line) for line in Path(result["ledger_path"]).read_text().splitlines()]
+        self.assertTrue(any(event["event_type"] == "attempt_cancelled_before_dispatch" for event in events))
+
     def test_interrupt_then_resume_preserves_unknown_spend_and_attempt_identity(self):
         client = InterruptOnceClient()
         with self.assertRaises(KeyboardInterrupt):
@@ -324,6 +350,10 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(before["complete"])
         self.assertEqual(before["counts"]["pending"], 1)
         self.assertEqual(before["counts"]["not_attempted"], 1)
+        provisional = render_leaderboard([before])
+        self.assertIn("Incomplete runs (not ranked)", provisional)
+        self.assertIn("Provider-reported cost (USD)", provisional)
+        self.assertIn("Unknown (0/1 requests priced)", provisional)
 
         resumed_client = FakeClient()
         result = resume_run(client=resumed_client, ledger_path=ledger)
@@ -391,7 +421,12 @@ class RunnerTests(unittest.TestCase):
             supported_parameters=("reasoning_effort",),
         )
         other_config = RunConfig(
-            **{**self.config.__dict__, "requested_model": "other-model", "display_model": "other-model-low"}
+            **{
+                **self.config.__dict__,
+                "requested_model": "other-model",
+                "display_model": "other-model-medium",
+                "reasoning_effort": "medium",
+            }
         )
         second = run_new(
             client=FakeClient(),
@@ -399,10 +434,35 @@ class RunnerTests(unittest.TestCase):
             model_info=other_info,
             results_dir=self.results_dir,
         )
+        replicate_config = RunConfig(
+            **{**self.config.__dict__, "display_model": "gpt-6-luna-low-repeat"}
+        )
+        replicate = run_new(
+            client=FakeClient(),
+            config=replicate_config,
+            model_info=self.model_info,
+            results_dir=self.results_dir,
+        )
         first_manifest = json.loads(Path(first["manifest_path"]).read_text())
         second_manifest = json.loads(Path(second["manifest_path"]).read_text())
+        replicate_manifest = json.loads(Path(replicate["manifest_path"]).read_text())
         self.assertEqual(first_manifest["dataset"]["dataset_id"], second_manifest["dataset"]["dataset_id"])
         self.assertEqual(first_manifest["dataset"]["sha256"], second_manifest["dataset"]["sha256"])
+        self.assertEqual(first_manifest["dataset"]["dataset_id"], replicate_manifest["dataset"]["dataset_id"])
+        summaries = [
+            summarize_run(first["ledger_path"]),
+            summarize_run(second["ledger_path"]),
+            summarize_run(replicate["ledger_path"]),
+        ]
+        leaderboard = render_leaderboard(summaries)
+        self.assertEqual(leaderboard.count("## Dataset"), 1)
+        self.assertIn("gpt-6-luna-low", leaderboard)
+        self.assertIn("other-model-medium", leaderboard)
+        self.assertIn("| Effort | Run |", leaderboard)
+        self.assertIn(first["run_id"][:8], leaderboard)
+        self.assertIn(second["run_id"][:8], leaderboard)
+        self.assertIn(replicate["run_id"][:8], leaderboard)
+        self.assertIn("gpt-6-luna-low-repeat", leaderboard)
 
 
 if __name__ == "__main__":

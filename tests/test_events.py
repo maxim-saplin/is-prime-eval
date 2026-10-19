@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from events import LedgerCorruptionError, append_event, load_events
+from events import LedgerCorruptionError, LedgerLockedError, append_event, ledger_lock, load_events
 
 
 class EventLedgerTests(unittest.TestCase):
@@ -48,6 +48,18 @@ class EventLedgerTests(unittest.TestCase):
             self.assertEqual(events, [])
             self.assertGreater(discarded, 0)
             self.assertEqual(path.read_bytes(), b"")
+
+    def test_advisory_ledger_lock_rejects_concurrent_owner_but_stale_file_is_reusable(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "run.jsonl"
+            with ledger_lock(path):
+                self.assertTrue(Path(f"{path}.lock").exists())
+                with self.assertRaises(LedgerLockedError):
+                    with ledger_lock(path):
+                        pass
+            # The lock file remains, but the OS lock is released with the fd.
+            with ledger_lock(path):
+                pass
 
 
 if __name__ == "__main__":

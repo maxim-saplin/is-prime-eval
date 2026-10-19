@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import threading
 import time
 from typing import Any, Callable, Mapping, Sequence
 from uuid import uuid4
@@ -21,7 +22,7 @@ from costs import (
     extract_provider_cost_usd,
     extract_usage,
 )
-from events import append_event, load_events
+from events import append_event, ledger_lock, load_events
 from openrouter import ModelInfo, OpenRouterClient, OpenRouterError
 from parse import parse_response
 from prompt import make_prompt
@@ -40,6 +41,24 @@ PARSER_VERSION = "bare-prime-composite-v1"
 PROMPT_TEMPLATE = "Is {number} prime? Reply with only PRIME or COMPOSITE."
 
 ProgressCallback = Callable[[dict[str, Any]], None]
+
+
+class EvaluationInterrupted(KeyboardInterrupt):
+    """Ctrl-C stopped a run after its ledger was safely paused."""
+
+    def __init__(self, ledger_path: str | Path):
+        self.ledger_path = str(Path(ledger_path).resolve())
+        self.manifest_path = str(_manifest_path(Path(self.ledger_path)))
+        super().__init__(f"evaluation paused; resume with --resume {self.ledger_path}")
+
+
+@dataclass(frozen=True)
+class PreparedDataset:
+    """Frozen case list/manifests shared by every model in one batch."""
+
+    cases: tuple[Case, ...]
+    path: Path
+    payload: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -431,7 +450,12 @@ def _events_state(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         if event_type == "attempt_started" and attempt_id:
             started[str(attempt_id)] = event
             attempts_by_case.setdefault(case_id, []).append(event)
-        elif event_type in {"attempt_response", "attempt_failed", "attempt_interrupted"} and attempt_id:
+        elif event_type in {
+            "attempt_response",
+            "attempt_failed",
+            "attempt_interrupted",
+            "attempt_cancelled_before_dispatch",
+        } and attempt_id:
             completed_attempts.add(str(attempt_id))
             if event_type == "attempt_response":
                 terminal_cases[case_id] = event
@@ -439,6 +463,19 @@ def _events_state(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             terminal_cases[case_id] = event
         elif event_type == "run_finished":
             finished = True
+    cancelled_before_dispatch = {
+        str(event.get("attempt_id"))
+        for event in events
+        if event.get("event_type") == "attempt_cancelled_before_dispatch"
+        and event.get("attempt_id")
+    }
+    attempts_by_case = {
+        case_id: [
+            attempt for attempt in attempts
+            if str(attempt.get("attempt_id")) not in cancelled_before_dispatch
+        ]
+        for case_id, attempts in attempts_by_case.items()
+    }
     return {
         "started": started,
         "completed_attempts": completed_attempts,
@@ -673,10 +710,24 @@ def _execute_run(
     model_info: ModelInfo,
     events: list[dict[str, Any]],
     on_progress: ProgressCallback | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
     run_id = str(manifest["run_id"])
     events = _append_orphan_attempts(ledger_path, run_id, events)
     state = _events_state(events)
+    terminal_cases = dict(state["terminal_cases"])
+    progress_counts = _basic_counts(cases, terminal_cases)
+    if on_progress:
+        on_progress(
+            {
+                "event": "run_progress_init",
+                "display_model": config.display_model,
+                "total_cases": len(cases),
+                "completed_cases": len(terminal_cases),
+                "correct": progress_counts["correct"],
+                "incorrect": progress_counts["incorrect"],
+            }
+        )
     if state["finished"]:
         return {
             "ledger_path": str(ledger_path),
@@ -684,6 +735,9 @@ def _execute_run(
             "run_id": run_id,
             "complete": True,
             "already_finished": True,
+            "scheduled_cases": len(cases),
+            "terminal_cases": len(terminal_cases),
+            "summary": progress_counts,
         }
 
     append_event(
@@ -702,6 +756,8 @@ def _execute_run(
 
     try:
         for case in cases:
+            if cancel_event is not None and cancel_event.is_set():
+                break
             if case.case_id in terminal_cases:
                 continue
             prior_attempts = list(attempts_by_case.get(case.case_id, []))
@@ -727,6 +783,8 @@ def _execute_run(
                         "attempt_count": len(prior_attempts),
                     },
                 )
+                if on_progress:
+                    on_progress({"event": "case_finished", "display_model": config.display_model, "case_id": case.case_id, "outcome": "no_response", "completion_tokens": 0, "total_cases": len(cases)})
                 continue
             if next_attempt > max_attempts:
                 append_event(
@@ -741,9 +799,13 @@ def _execute_run(
                         "attempt_count": len(prior_attempts),
                     },
                 )
+                if on_progress:
+                    on_progress({"event": "case_finished", "display_model": config.display_model, "case_id": case.case_id, "outcome": "no_response", "completion_tokens": 0, "total_cases": len(cases)})
                 continue
 
             while next_attempt <= max_attempts:
+                if cancel_event is not None and cancel_event.is_set():
+                    break
                 attempt_id = uuid4().hex
                 prompt_text = make_prompt(case.number)
                 attempt_started_at = _utc_now()
@@ -772,11 +834,39 @@ def _execute_run(
                     on_progress(
                         {
                             "event": "attempt_started",
+                            "display_model": config.display_model,
                             "case_id": case.case_id,
                             "attempt_number": next_attempt,
+                            "max_attempts": max_attempts,
                             "total_cases": len(cases),
                         }
                     )
+                if cancel_event is not None and cancel_event.is_set():
+                    append_event(
+                        ledger_path,
+                        {
+                            "event_type": "attempt_cancelled_before_dispatch",
+                            "run_id": run_id,
+                            "trial_id": case.case_id,
+                            "case_id": case.case_id,
+                            "attempt_id": attempt_id,
+                            "attempt_number": next_attempt,
+                            "may_have_been_billed": False,
+                            "spend_status": "not_dispatched",
+                            "reason": "cancel requested before HTTP dispatch",
+                        },
+                    )
+                    if on_progress:
+                        on_progress(
+                            {
+                                "event": "attempt_cancelled_before_dispatch",
+                                "display_model": config.display_model,
+                                "case_id": case.case_id,
+                                "attempt_number": next_attempt,
+                                "total_cases": len(cases),
+                            }
+                        )
+                    break
                 try:
                     response = client.complete(
                         model_info.model_id,
@@ -821,9 +911,29 @@ def _execute_run(
                             "latency_seconds": round(time.monotonic() - attempt_started_monotonic, 6),
                         },
                     )
+                    if on_progress:
+                        error_tokens = error_usage.get("completion_tokens")
+                        on_progress(
+                            {
+                                "event": "attempt_failed",
+                                "display_model": config.display_model,
+                                "case_id": case.case_id,
+                                "attempt_number": next_attempt,
+                                "max_attempts": max_attempts,
+                                "completion_tokens": error_tokens if isinstance(error_tokens, int) else 0,
+                                "reason": str(exc),
+                                "retryable": exc.retryable,
+                            }
+                        )
                     if exc.retryable and next_attempt < max_attempts:
-                        if retry_delay:
-                            time.sleep(retry_delay * (2 ** (next_attempt - 1)))
+                        delay = retry_delay * (2 ** (next_attempt - 1))
+                        if cancel_event is not None:
+                            if cancel_event.wait(delay):
+                                break
+                        elif delay:
+                            time.sleep(delay)
+                        if cancel_event is not None and cancel_event.is_set():
+                            break
                         next_attempt += 1
                         continue
                     append_event(
@@ -838,6 +948,17 @@ def _execute_run(
                             "attempt_count": next_attempt,
                         },
                     )
+                    if on_progress:
+                        on_progress(
+                            {
+                                "event": "case_finished",
+                                "display_model": config.display_model,
+                                "case_id": case.case_id,
+                                "outcome": "no_response",
+                                "completion_tokens": 0,
+                                "total_cases": len(cases),
+                            }
+                        )
                     break
                 except Exception as exc:
                     # Unexpected client exceptions are recorded without exposing
@@ -874,6 +995,17 @@ def _execute_run(
                             "attempt_count": next_attempt,
                         },
                     )
+                    if on_progress:
+                        on_progress(
+                            {
+                                "event": "case_finished",
+                                "display_model": config.display_model,
+                                "case_id": case.case_id,
+                                "outcome": "no_response",
+                                "completion_tokens": 0,
+                                "total_cases": len(cases),
+                            }
+                        )
                     break
 
                 if not isinstance(response, Mapping):
@@ -897,8 +1029,10 @@ def _execute_run(
                     on_progress(
                         {
                             "event": "case_finished",
+                            "display_model": config.display_model,
                             "case_id": case.case_id,
                             "outcome": event["outcome"],
+                            "completion_tokens": event.get("usage", {}).get("completion_tokens") or 0,
                             "completed_cases": len(terminal_cases),
                             "total_cases": len(cases),
                         }
@@ -917,6 +1051,17 @@ def _execute_run(
                         "attempt_count": max_attempts,
                     },
                 )
+                if on_progress:
+                    on_progress(
+                        {
+                            "event": "case_finished",
+                            "display_model": config.display_model,
+                            "case_id": case.case_id,
+                            "outcome": "no_response",
+                            "completion_tokens": 0,
+                            "total_cases": len(cases),
+                        }
+                    )
     except KeyboardInterrupt:
         append_event(
             ledger_path,
@@ -949,7 +1094,11 @@ def _execute_run(
             {
                 "event_type": "run_paused",
                 "run_id": run_id,
-                "reason": "pending cases remain",
+                "reason": (
+                    "cancellation requested"
+                    if cancel_event is not None and cancel_event.is_set()
+                    else "pending cases remain"
+                ),
                 "scheduled_cases": len(cases),
                 "terminal_cases": len(terminal_cases),
             },
@@ -985,7 +1134,7 @@ def _basic_counts(cases: Sequence[Case], terminal_cases: Mapping[str, Mapping[st
     return counts
 
 
-def run_new(
+def _run_new_unlocked(
     *,
     client: OpenRouterClient,
     config: RunConfig,
@@ -993,6 +1142,8 @@ def run_new(
     results_dir: str | Path = "results",
     ledger_path: str | Path | None = None,
     on_progress: ProgressCallback | None = None,
+    prepared_dataset: PreparedDataset | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Create a frozen dataset/run manifest and execute a new evaluation."""
     config.validate()
@@ -1004,8 +1155,20 @@ def run_new(
 
     root = Path(results_dir).resolve()
     root.mkdir(parents=True, exist_ok=True)
-    cases = generate_cases(config.depths, config.samples_per_class, config.seed)
-    dataset_path, dataset_payload = _write_or_verify_dataset(root, cases, config)
+    if prepared_dataset is None:
+        cases = generate_cases(config.depths, config.samples_per_class, config.seed)
+        dataset_path, dataset_payload = _write_or_verify_dataset(root, cases, config)
+    else:
+        cases = list(prepared_dataset.cases)
+        dataset_path = prepared_dataset.path.resolve()
+        dataset_payload = dict(prepared_dataset.payload)
+        if (
+            int(dataset_payload.get("seed", -1)) != config.seed
+            or tuple(dataset_payload.get("depths", ())) != config.depths
+            or int(dataset_payload.get("samples_per_class", -1)) != config.samples_per_class
+            or not dataset_path.is_file()
+        ):
+            raise ValueError("prepared dataset does not match run configuration")
     ledger = Path(ledger_path).resolve() if ledger_path is not None else _new_ledger_path(root, config.display_model)
     if ledger.exists() or _manifest_path(ledger).exists():
         raise FileExistsError(f"run output already exists: {ledger}")
@@ -1031,15 +1194,63 @@ def run_new(
         model_info=model_info,
         events=events,
         on_progress=on_progress,
+        cancel_event=cancel_event,
     )
 
 
-def resume_run(
+def run_new(
+    *,
+    client: OpenRouterClient,
+    config: RunConfig,
+    model_info: ModelInfo,
+    results_dir: str | Path = "results",
+    ledger_path: str | Path | None = None,
+    on_progress: ProgressCallback | None = None,
+    prepared_dataset: PreparedDataset | None = None,
+    cancel_event: threading.Event | None = None,
+) -> dict[str, Any]:
+    """Start a run while exclusively owning its target ledger."""
+    root = Path(results_dir).resolve()
+    ledger = (
+        Path(ledger_path).resolve()
+        if ledger_path is not None
+        else _new_ledger_path(root, config.display_model)
+    )
+    try:
+        with ledger_lock(ledger):
+            return _run_new_unlocked(
+                client=client,
+                config=config,
+                model_info=model_info,
+                results_dir=root,
+                ledger_path=ledger,
+                on_progress=on_progress,
+                prepared_dataset=prepared_dataset,
+                cancel_event=cancel_event,
+            )
+    except KeyboardInterrupt as exc:
+        raise EvaluationInterrupted(ledger) from exc
+
+
+def prepare_case_dataset(
+    *, results_dir: str | Path, config: RunConfig
+) -> PreparedDataset:
+    """Generate and persist the one immutable case manifest before batch dispatch."""
+    config.validate()
+    root = Path(results_dir).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    cases = generate_cases(config.depths, config.samples_per_class, config.seed)
+    dataset_path, dataset_payload = _write_or_verify_dataset(root, cases, config)
+    return PreparedDataset(tuple(cases), dataset_path, dataset_payload)
+
+
+def _resume_run_unlocked(
     *,
     client: OpenRouterClient,
     ledger_path: str | Path,
     overrides: Mapping[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Resume only pending cases from a matching frozen run/configuration."""
     ledger = Path(ledger_path).resolve()
@@ -1082,7 +1293,31 @@ def resume_run(
         model_info=model_info,
         events=events,
         on_progress=on_progress,
+        cancel_event=cancel_event,
     )
+
+
+def resume_run(
+    *,
+    client: OpenRouterClient,
+    ledger_path: str | Path,
+    overrides: Mapping[str, Any] | None = None,
+    on_progress: ProgressCallback | None = None,
+    cancel_event: threading.Event | None = None,
+) -> dict[str, Any]:
+    """Resume pending cases while exclusively owning the event ledger."""
+    ledger = Path(ledger_path).resolve()
+    try:
+        with ledger_lock(ledger):
+            return _resume_run_unlocked(
+                client=client,
+                ledger_path=ledger,
+                overrides=overrides,
+                on_progress=on_progress,
+                cancel_event=cancel_event,
+            )
+    except KeyboardInterrupt as exc:
+        raise EvaluationInterrupted(ledger) from exc
 
 
 def create_dry_run_plan(
