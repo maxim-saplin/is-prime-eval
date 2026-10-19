@@ -141,8 +141,8 @@ class MultiRunTests(unittest.TestCase):
             self.assertEqual(len({row["result"]["ledger_path"] for row in results}), 2)
             manifests = [json.loads(Path(row["result"]["manifest_path"]).read_text()) for row in results]
             self.assertEqual(manifests[0]["dataset"]["dataset_id"], manifests[1]["dataset"]["dataset_id"])
-            self.assertIn("provider/model-a | low", output.getvalue())
-            self.assertIn("provider/model-b | low", output.getvalue())
+            self.assertIn("Model ID: provider/model-a | Effort: low", output.getvalue())
+            self.assertIn("Model ID: provider/model-b | Effort: low", output.getvalue())
             self.assertIn("ETA", output.getvalue())
             self.assertIn("tok/s", output.getvalue())
             self.assertIn("batch elapsed", output.getvalue())

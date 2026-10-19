@@ -1,4 +1,4 @@
-"""Thread-safe terminal progress bars for one or more model runs."""
+"""Thread-safe in-place per-model progress bars and batch elapsed status."""
 
 from __future__ import annotations
 
@@ -19,10 +19,20 @@ def _duration(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+def _terminal_text(value: str, max_chars: int) -> str:
+    printable = "".join(character if character.isprintable() else "?" for character in value)
+    if len(printable) <= max_chars:
+        return printable
+    if max_chars <= 3:
+        return printable[:max_chars]
+    return printable[: max_chars - 3] + "..."
+
+
 @dataclass
 class _ModelProgress:
     total: int
     started_at: float
+    finished_at: float | None = None
     initial_completed: int = 0
     completed: int = 0
     output_tokens: int = 0
@@ -32,16 +42,14 @@ class _ModelProgress:
     active_case: str | None = None
     active_attempt: int | None = None
     active_max_attempts: int | None = None
-    status: str = "starting"
 
 
 class ProgressReporter:
-    """Render an in-place multi-model dashboard on TTY; throttle piped logs.
+    """Render one stable two-line progress bar per model on a TTY.
 
-    Requests are non-streaming: completion tokens become observable only after
-    a response. The output tokens/s number is measured completion tokens
-    (including reasoning, when reported) divided by this model run's elapsed
-    wall time; it is not token-by-token generation speed.
+    Non-streaming responses expose token usage only when they finish. The shown
+    token rate is observed completion tokens (reasoning included when reported)
+    divided by wall-clock elapsed time, not live generation speed.
     """
 
     def __init__(
@@ -51,7 +59,6 @@ class ProgressReporter:
         heartbeat_interval: float = 5.0,
         force_tty: bool | None = None,
     ) -> None:
-        # Keep progress on stderr so stdout remains suitable for piping reports.
         self.stream = stream or sys.stderr
         detected_tty = getattr(self.stream, "isatty", lambda: False)()
         self._is_tty = detected_tty if force_tty is None else force_tty
@@ -65,6 +72,7 @@ class ProgressReporter:
         self._heartbeat_stop = threading.Event()
         self._heartbeat_thread: threading.Thread | None = None
         self._rendered_lines = 0
+        self._non_tty_last_completed: dict[ProgressKey, int] = {}
 
     def __enter__(self) -> "ProgressReporter":
         return self
@@ -138,21 +146,18 @@ class ProgressReporter:
     def model_finished(
         self, model_id: str, reasoning_effort: str, *, success: bool
     ) -> None:
-        """Report batch elapsed separately when one model worker exits."""
         key = (model_id, reasoning_effort)
         with self._lock:
             if key in self._finished_models:
                 return
             self._finished_models.add(key)
-            status = "complete" if success else "failed/incomplete"
-            model_state = self._models.get(key)
-            if model_state is not None:
-                model_state.active_case = None
-                model_state.status = status
+            if key in self._models:
+                self._models[key].active_case = None
+                self._models[key].finished_at = time.monotonic()
             total = self._batch_total if self._batch_total is not None else len(self._models)
             if total > 0 and len(self._finished_models) >= total:
                 self._heartbeat_stop.set()
-            self._render_locked(status)
+            self._render_locked("model complete" if success else "model incomplete")
 
     def __call__(self, event: dict[str, Any]) -> None:
         model_id = str(event.get("model_id", "model"))
@@ -174,35 +179,30 @@ class ProgressReporter:
                 state.incorrect = int(event.get("incorrect", 0))
                 state.started_at = time.monotonic()
                 state.active_case = None
-                state.status = "run state loaded"
-                self._render_locked(state.status)
+                self._render_locked("run state loaded")
                 return
 
             if event_type == "attempt_started":
                 state.active_case = str(event.get("case_id", "request"))
                 state.active_attempt = int(event.get("attempt_number") or 1)
                 state.active_max_attempts = int(event.get("max_attempts") or 1)
-                state.status = f"request {state.active_attempt}/{state.active_max_attempts} started"
                 self._start_heartbeat_locked()
-                self._render_locked(state.status)
+                self._render_locked("request started")
                 return
 
             if event_type == "attempt_cancelled_before_dispatch":
                 state.active_case = None
-                state.status = "cancelled before dispatch"
-                self._render_locked(state.status)
+                self._render_locked("cancelled before dispatch")
                 return
 
             if event_type == "attempt_failed":
                 count = event.get("completion_tokens")
                 if isinstance(count, int) and count >= 0:
                     state.output_tokens += count
-                attempt = event.get("attempt_number", "?")
-                maximum = event.get("max_attempts", "?")
                 state.active_case = str(event.get("case_id", state.active_case or "request"))
-                state.active_attempt = int(attempt) if isinstance(attempt, int) else None
-                state.active_max_attempts = int(maximum) if isinstance(maximum, int) else None
-                state.status = f"attempt {attempt}/{maximum} failed; retry/backoff if allowed"
+                state.active_attempt = int(event.get("attempt_number") or 1)
+                state.active_max_attempts = int(event.get("max_attempts") or 1)
+                state.status = f"attempt {state.active_attempt}/{state.active_max_attempts} failed; retry/backoff if allowed"
                 self._render_locked(state.status)
                 return
 
@@ -224,14 +224,12 @@ class ProgressReporter:
                 state.correct += 1
             elif outcome in {"wrong_label", "invalid_response", "no_response"}:
                 state.incorrect += 1
-            state.status = outcome
             self._render_locked(outcome)
 
-    def _model_line(self, key: ProgressKey, state: _ModelProgress) -> str:
+    def _model_lines(self, key: ProgressKey, state: _ModelProgress, width: int) -> tuple[str, str]:
         model_id, effort = key
-        model_label = model_id if len(model_id) <= 32 else model_id[:29] + "..."
-        effort_label = effort if len(effort) <= 12 else effort[:9] + "..."
-        elapsed = max(0.0, time.monotonic() - state.started_at)
+        end_time = state.finished_at if state.finished_at is not None else time.monotonic()
+        elapsed = max(0.0, end_time - state.started_at)
         completed_this_session = max(0, state.completed - state.initial_completed)
         remaining_cases = max(0, state.total - state.completed)
         eta = (
@@ -241,14 +239,26 @@ class ProgressReporter:
         )
         rate = state.output_tokens / elapsed if elapsed > 0 else 0.0
         ratio = state.completed / state.total if state.total else 0.0
-        bar_width = 12
-        filled = min(bar_width, int(ratio * bar_width))
-        bar = "█" * filled + "░" * (bar_width - filled)
-        return (
-            f"{model_label} | {effort_label} | [{bar}] {state.completed}/{state.total} "
-            f"{ratio * 100:.0f}% | elapsed {_duration(elapsed)} | ETA {eta} | "
-            f"out {rate:.1f} tok/s | C{state.correct} W{state.incorrect}"
+
+        # Preserve the useful counters and rate at narrow widths by shortening
+        # labels/bar first, rather than slicing off ETA or tokens/second.
+        effort_label = _terminal_text(effort, 12)
+        bar_width = min(12, max(4, width // 10))
+        suffix = f" | [{('█' * min(bar_width, int(ratio * bar_width))) + ('░' * (bar_width - min(bar_width, int(ratio * bar_width))))}] {state.completed}/{state.total} ({ratio:.0%})"
+        middle = f" | Effort: {effort_label}"
+        model_budget = max(4, width - len("Model ID: ") - len(middle) - len(suffix))
+        model_label = _terminal_text(model_id, model_budget)
+        first_line = f"Model ID: {model_label}{middle}{suffix}"
+        if len(first_line) > width:
+            first_line = first_line[:width]
+
+        second_line = (
+            f"Elapsed {_duration(elapsed)} | ETA {eta} | Output {rate:.1f} tok/s | "
+            f"Correct {state.correct} | Incorrect {state.incorrect}"
         )
+        if len(second_line) > width:
+            second_line = second_line[:width]
+        return first_line, second_line
 
     def _render_locked(self, status: str) -> None:
         total = self._batch_total if self._batch_total is not None else len(self._models)
@@ -258,29 +268,30 @@ class ProgressReporter:
             f"Prime eval | model runs {len(self._finished_models)}/{total} complete "
             f"| batch elapsed {batch_elapsed} | {header_status}"
         ]
-        lines.extend(self._model_line(key, state) for key, state in self._models.items())
+        width = max(40, shutil.get_terminal_size((120, 24)).columns - 1)
+        for key, state in self._models.items():
+            lines.extend(self._model_lines(key, state, width))
 
         if self._is_tty:
             if self._rendered_lines:
                 self.stream.write(f"\x1b[{self._rendered_lines}A")
-            width = max(40, shutil.get_terminal_size((120, 24)).columns - 1)
             for line in lines:
-                rendered = line[:width]
-                self.stream.write("\r\x1b[2K" + rendered + "\n")
+                self.stream.write("\r\x1b[2K" + line + "\n")
             self.stream.flush()
             self._rendered_lines = len(lines)
             return
 
-        # A redirected log cannot be redrawn in place; emit only an initial,
-        # periodic-case, terminal or interrupted summary rather than every call.
+        # A redirected log cannot be redrawn in place; emit periodic summaries.
         emit = (
-            status in {"starting", "complete", "incomplete", "run state loaded", "attempt_cancelled_before_dispatch"}
-            or status.startswith("attempt ")
+            status in {"starting", "model complete", "model incomplete", "run state loaded", "cancelled before dispatch"}
+            or "failed" in status
             or bool(self._batch_notice)
         )
-        for state in self._models.values():
-            interval = max(1, state.total // 20)
-            if state.completed and state.completed % interval == 0:
+        for key, state in self._models.items():
+            interval = max(1, state.total // 10)
+            last = self._non_tty_last_completed.get(key, -1)
+            if state.completed and state.completed % interval == 0 and state.completed != last:
+                self._non_tty_last_completed[key] = state.completed
                 emit = True
         if emit:
             for line in lines:

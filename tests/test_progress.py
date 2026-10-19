@@ -28,13 +28,13 @@ class ProgressReporterTests(unittest.TestCase):
             }
         )
         text = output.getvalue()
-        self.assertIn("openai/gpt-6-luna | low", text)
+        self.assertIn("Model ID: openai/gpt-6-luna | Effort: low", text)
         self.assertIn("1/10", text)
         self.assertIn("elapsed", text)
         self.assertIn("ETA", text)
-        self.assertIn("out", text)
+        self.assertIn("Output", text)
         self.assertIn("tok/s", text)
-        self.assertIn("C1", text)
+        self.assertIn("Correct 1", text)
 
     def test_failure_usage_is_included_in_output_token_rate(self):
         output = io.StringIO()
@@ -73,8 +73,23 @@ class ProgressReporterTests(unittest.TestCase):
         text = output.getvalue()
         self.assertIn("[", text)
         self.assertIn("█", text)
-        self.assertIn("\x1b[2A", text)
-        self.assertIn("openai/gpt-6-luna | low", text)
+        self.assertIn("\x1b[3A", text)
+        self.assertIn("Model ID: openai/gpt-6-luna | Effort: low", text)
+
+    def test_80_column_rows_keep_eta_and_token_rate_visible(self):
+        reporter = ProgressReporter(stream=io.StringIO(), force_tty=True)
+        reporter.register_model("openai/gpt-6-luna", "high", 140)
+        state = reporter._models[("openai/gpt-6-luna", "high")]
+        state.completed = 14
+        state.output_tokens = 5_000
+        first_line, second_line = reporter._model_lines(("openai/gpt-6-luna", "high"), state, 79)
+        self.assertLessEqual(len(first_line), 79)
+        self.assertLessEqual(len(second_line), 79)
+        self.assertIn("Model ID:", first_line)
+        self.assertIn("Effort:", first_line)
+        self.assertIn("ETA", second_line)
+        self.assertIn("tok/s", second_line)
+        reporter.close()
 
     def test_redirected_progress_is_throttled(self):
         output = io.StringIO()
@@ -94,6 +109,29 @@ class ProgressReporterTests(unittest.TestCase):
             )
         reporter.model_finished("openai/model", "low", success=True)
         self.assertLessEqual(len(output.getvalue().splitlines()), 50)
+
+    def test_finished_model_elapsed_and_rate_freeze_while_batch_continues(self):
+        reporter = ProgressReporter(stream=io.StringIO())
+        reporter.set_batch_total(2)
+        reporter.register_model("provider/fast", "low", 1)
+        reporter.register_model("provider/slow", "medium", 2)
+        reporter(
+            {
+                "event": "case_finished",
+                "model_id": "provider/fast",
+                "reasoning_effort": "low",
+                "case_id": "fast-case",
+                "outcome": "correct",
+                "completion_tokens": 100,
+            }
+        )
+        reporter.model_finished("provider/fast", "low", success=True)
+        key = ("provider/fast", "low")
+        first = reporter._model_lines(key, reporter._models[key], 79)
+        time.sleep(0.05)
+        second = reporter._model_lines(key, reporter._models[key], 79)
+        self.assertEqual(first, second)
+        reporter.close()
 
     def test_heartbeat_reports_a_slow_nonstreaming_request(self):
         output = io.StringIO()
