@@ -132,12 +132,13 @@ def run_many(
     except KeyboardInterrupt:
         interrupted = True
         cancellation.set()
-        print(
-            "Cancellation requested: no new model requests will start; "
-            "waiting for in-flight requests to finish and be logged.",
-            file=sys.stderr,
-            flush=True,
+        notice = (
+            "cancellation requested; no new requests; waiting for in-flight responses"
         )
+        if on_progress is not None and hasattr(on_progress, "set_batch_status"):
+            on_progress.set_batch_status(notice)
+        else:
+            print(notice, file=sys.stderr, flush=True)
         for future in futures:
             future.cancel()
     finally:

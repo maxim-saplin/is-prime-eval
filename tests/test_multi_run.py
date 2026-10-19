@@ -141,8 +141,8 @@ class MultiRunTests(unittest.TestCase):
             self.assertEqual(len({row["result"]["ledger_path"] for row in results}), 2)
             manifests = [json.loads(Path(row["result"]["manifest_path"]).read_text()) for row in results]
             self.assertEqual(manifests[0]["dataset"]["dataset_id"], manifests[1]["dataset"]["dataset_id"])
-            self.assertIn("model_id=provider/model-a | reasoning_effort=low", output.getvalue())
-            self.assertIn("model_id=provider/model-b | reasoning_effort=low", output.getvalue())
+            self.assertIn("provider/model-a | low", output.getvalue())
+            self.assertIn("provider/model-b | low", output.getvalue())
             self.assertIn("ETA", output.getvalue())
             self.assertIn("tok/s", output.getvalue())
             self.assertIn("batch elapsed", output.getvalue())
@@ -181,7 +181,7 @@ class MultiRunTests(unittest.TestCase):
             self.assertEqual(summaries[0]["counts"]["pending"] + summaries[0]["counts"]["not_attempted"], 1)
             self.assertEqual(summaries[1]["counts"]["attempted_cases"], 0)
             self.assertEqual(summaries[1]["counts"]["not_attempted"], 2)
-            self.assertIn("Cancellation requested", errors.getvalue())
+            self.assertIn("cancellation requested", output.getvalue())
             reporter.close()
 
 
