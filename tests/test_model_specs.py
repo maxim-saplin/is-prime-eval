@@ -1,136 +1,97 @@
 from dataclasses import FrozenInstanceError
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
-from model_specs import (
-    ModelSpec,
-    parse_model_qualifier,
-    parse_model_qualifiers,
-)
+from model_specs import ModelSpec, load_model_specs
 
 
-class ParseModelQualifierTests(unittest.TestCase):
-    def test_short_hyphen_effort_suffix(self):
+class LoadModelSpecsTests(unittest.TestCase):
+    def _load_document(self, document):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "models.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            return load_model_specs(path)
+
+    def test_loads_explicit_specs_in_order(self):
+        specs = self._load_document(
+            [
+                {"model_id": "openai/gpt-6-luna", "reasoning_effort": "low"},
+                {"model_id": "openai/gpt-6-luna", "reasoning_effort": "medium"},
+                {"model_id": "anthropic/claude-sonnet", "reasoning_effort": "low"},
+            ]
+        )
         self.assertEqual(
-            parse_model_qualifier("gpt-6-luna-low"),
-            ModelSpec(
-                requested_model="gpt-6-luna",
-                display_model="gpt-6-luna-low",
-                reasoning_effort="low",
-            ),
+            specs,
+            [
+                ModelSpec("openai/gpt-6-luna", "low"),
+                ModelSpec("openai/gpt-6-luna", "medium"),
+                ModelSpec("anthropic/claude-sonnet", "low"),
+            ],
         )
 
-    def test_provider_qualified_colon_suffix(self):
-        self.assertEqual(
-            parse_model_qualifier("openai/gpt-6-luna:medium"),
-            ModelSpec(
-                requested_model="openai/gpt-6-luna",
-                display_model="gpt-6-luna-medium",
-                reasoning_effort="medium",
-            ),
-        )
-
-    def test_alias_overrides_derived_display_name(self):
-        self.assertEqual(
-            parse_model_qualifier("baseline=openai/gpt-6-luna:medium"),
-            ModelSpec(
-                requested_model="openai/gpt-6-luna",
-                display_model="baseline",
-                reasoning_effort="medium",
-            ),
-        )
-
-    def test_alias_without_explicit_effort_uses_default(self):
-        self.assertEqual(
-            parse_model_qualifier("reference=model-x", default_effort="HIGH"),
-            ModelSpec("model-x", "reference", "high"),
-        )
-
-    def test_default_effort_and_no_effort(self):
-        self.assertEqual(
-            parse_model_qualifier("vendor/model-x"),
-            ModelSpec("vendor/model-x", "model-x-low", "low"),
-        )
-        self.assertEqual(
-            parse_model_qualifier("vendor/model-x", default_effort=None),
-            ModelSpec("vendor/model-x", "model-x", None),
-        )
-
-    def test_explicit_effort_overrides_default_effort(self):
-        self.assertEqual(
-            parse_model_qualifier("model-x:high", default_effort="low"),
-            ModelSpec("model-x", "model-x-high", "high"),
-        )
+    def test_preserves_duplicate_model_and_effort_entries(self):
+        duplicate = {"model_id": "openai/gpt-6-luna", "reasoning_effort": "low"}
+        self.assertEqual(self._load_document([duplicate, duplicate]), [
+            ModelSpec("openai/gpt-6-luna", "low"),
+            ModelSpec("openai/gpt-6-luna", "low"),
+        ])
 
     def test_model_spec_is_frozen(self):
-        spec = parse_model_qualifier("model-x-low")
+        spec = ModelSpec("openai/gpt-6-luna", "low")
         with self.assertRaises(FrozenInstanceError):
-            spec.display_model = "changed"
+            spec.model_id = "other/model"
 
-    def test_rejects_empty_or_malformed_qualifiers(self):
+    def test_requires_a_nonempty_json_array(self):
+        for document in ({"model_id": "openai/model", "reasoning_effort": "low"}, "[]", None, 3):
+            with self.subTest(document=document):
+                with self.assertRaisesRegex(ValueError, "JSON array"):
+                    self._load_document(document)
+        with self.assertRaisesRegex(ValueError, "must not be empty"):
+            self._load_document([])
+
+    def test_requires_exact_object_keys(self):
         invalid = (
-            "",
-            "   ",
-            "=model-x",
-            "alias=",
-            "alias==model-x",
-            "bad alias=model-x",
-            "model with spaces",
-            "model-x:",
-            "model-x:fast",
-            "model-x:low:medium",
-            "model-x-low:medium",
-            "model-x-low-high",
+            {"model_id": "openai/model"},
+            {"reasoning_effort": "low"},
+            {
+                "model_id": "openai/model",
+                "reasoning_effort": "low",
+                "alias": "baseline",
+            },
         )
-        for text in invalid:
-            with self.subTest(text=text):
-                with self.assertRaises(ValueError):
-                    parse_model_qualifier(text)
+        for row in invalid:
+            with self.subTest(row=row):
+                with self.assertRaisesRegex(ValueError, "invalid fields"):
+                    self._load_document([row])
 
-    def test_rejects_invalid_default_effort(self):
-        for effort in ("", "none", "fast", 3):
+    def test_requires_fully_qualified_nonempty_model_id(self):
+        for model_id in ("", "model", "/model", "openai/", "openai//model", " openai/model", "openai/model ", "openai/model name"):
+            with self.subTest(model_id=model_id):
+                with self.assertRaisesRegex(ValueError, "fully qualified|whitespace|non-empty"):
+                    self._load_document(
+                        [{"model_id": model_id, "reasoning_effort": "low"}]
+                    )
+
+    def test_requires_explicit_low_or_medium_effort(self):
+        for effort in (None, "", "LOW", "high", 1):
             with self.subTest(effort=effort):
-                with self.assertRaises((TypeError, ValueError)):
-                    parse_model_qualifier("model-x", default_effort=effort)
+                with self.assertRaisesRegex(ValueError, "exactly 'low' or 'medium'"):
+                    self._load_document(
+                        [{"model_id": "openai/model", "reasoning_effort": effort}]
+                    )
 
+    def test_rejects_non_object_array_elements(self):
+        with self.assertRaisesRegex(ValueError, r"model_specs\[0\] must be an object"):
+            self._load_document(["openai/model:low"])
 
-class ParseModelQualifiersTests(unittest.TestCase):
-    def test_preserves_order_and_allows_replicates_with_distinct_aliases(self):
-        specs = parse_model_qualifiers(
-            ["baseline=model-x-low", "replicate=model-x:low", "other=model-y-medium"]
-        )
-        self.assertEqual(
-            [spec.display_model for spec in specs],
-            ["baseline", "replicate", "other"],
-        )
-        self.assertEqual(specs[0].requested_model, specs[1].requested_model)
-        self.assertEqual(specs[0].reasoning_effort, specs[1].reasoning_effort)
-
-    def test_rejects_duplicate_implicit_display_names(self):
-        with self.assertRaisesRegex(ValueError, "duplicate model display name"):
-            parse_model_qualifiers(["model-x-low", "model-x:low"])
-
-    def test_rejects_duplicate_aliases(self):
-        with self.assertRaisesRegex(ValueError, "duplicate model display name"):
-            parse_model_qualifiers(["baseline=model-x-low", "baseline=model-y-medium"])
-
-    def test_duplicate_detection_is_case_insensitive(self):
-        with self.assertRaisesRegex(ValueError, "duplicate model display name"):
-            parse_model_qualifiers(["Baseline=model-x-low", "baseline=model-y-low"])
-
-    def test_alias_must_be_unique_against_an_implicit_display_name(self):
-        with self.assertRaisesRegex(ValueError, "duplicate model display name"):
-            parse_model_qualifiers(["model-x-low", "model-x-low=model-y"])
-
-    def test_allows_empty_sequence_but_not_string_as_sequence(self):
-        self.assertEqual(parse_model_qualifiers([]), [])
-        with self.assertRaises(TypeError):
-            parse_model_qualifiers("model-x-low")
-
-    def test_rejects_non_iterable_and_invalid_entries(self):
-        with self.assertRaises(TypeError):
-            parse_model_qualifiers(3)
-        with self.assertRaises(TypeError):
-            parse_model_qualifiers(["model-x-low", None])
+    def test_reports_invalid_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "models.json"
+            path.write_text('[{"model_id":', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "invalid model specs JSON"):
+                load_model_specs(path)
 
 
 if __name__ == "__main__":

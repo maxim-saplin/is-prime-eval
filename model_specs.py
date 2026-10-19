@@ -1,143 +1,85 @@
-"""Parse model qualifiers for repeatable, parallel evaluation runs."""
+"""Load explicit model/run settings from a JSON manifest."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-import re
-from typing import Iterable
+import json
+from pathlib import Path
+from typing import Literal
 
 
-_ALLOWED_EFFORTS = frozenset({"low", "medium", "high"})
-_EFFORT_SUFFIX = re.compile(r"^(?P<model>.+)-(?P<effort>low|medium|high)$", re.IGNORECASE)
-_ALIAS_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+ReasoningEffort = Literal["low", "medium"]
+_REQUIRED_FIELDS = frozenset({"model_id", "reasoning_effort"})
+_ALLOWED_EFFORTS = frozenset({"low", "medium"})
 
 
 @dataclass(frozen=True)
 class ModelSpec:
-    """One model request and the label/effort used to run it."""
+    """One explicitly configured model run."""
 
-    requested_model: str
-    display_model: str
-    reasoning_effort: str | None
-
-
-def _normalize_effort(value: str | None, *, parameter_name: str) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError(f"{parameter_name} must be a string or None")
-    effort = value.strip().lower()
-    if effort not in _ALLOWED_EFFORTS:
-        allowed = ", ".join(sorted(_ALLOWED_EFFORTS))
-        raise ValueError(f"{parameter_name} must be one of: {allowed}")
-    return effort
+    model_id: str
+    reasoning_effort: ReasoningEffort
 
 
-def _split_model_effort(model_text: str) -> tuple[str, str | None]:
-    """Separate a recognized final ``:effort`` or ``-effort`` qualifier."""
-    if ":" in model_text:
-        if model_text.count(":") != 1:
-            raise ValueError("model qualifier may contain only one effort separator ':'")
-        model, effort_text = model_text.rsplit(":", 1)
-        effort = _normalize_effort(effort_text, parameter_name="reasoning effort")
-        if effort is None:
-            raise ValueError("reasoning effort must not be empty")
-        if _EFFORT_SUFFIX.fullmatch(model):
-            raise ValueError("specify reasoning effort only once")
-    else:
-        match = _EFFORT_SUFFIX.fullmatch(model_text)
-        if match is None:
-            model, effort = model_text, None
-        else:
-            model = match.group("model")
-            effort = match.group("effort").lower()
-            if _EFFORT_SUFFIX.fullmatch(model):
-                raise ValueError("specify reasoning effort only once")
-
-    if not model:
-        raise ValueError("model ID must not be empty")
-    return model, effort
+def _validate_model_id(value: object, *, index: int) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"model_specs[{index}].model_id must be a non-empty string")
+    if value != value.strip() or any(character.isspace() for character in value):
+        raise ValueError(f"model_specs[{index}].model_id must not contain whitespace")
+    if "/" not in value or value.startswith("/") or value.endswith("/") or "//" in value:
+        raise ValueError(
+            f"model_specs[{index}].model_id must be a fully qualified ID containing '/'"
+        )
+    return value
 
 
-def parse_model_qualifier(
-    text: str, default_effort: str | None = "low"
-) -> ModelSpec:
-    """Parse one model ID, optional effort suffix, and optional display alias.
+def _validate_effort(value: object, *, index: int) -> ReasoningEffort:
+    if not isinstance(value, str) or value not in _ALLOWED_EFFORTS:
+        raise ValueError(
+            f"model_specs[{index}].reasoning_effort must be exactly 'low' or 'medium'"
+        )
+    return value  # type: ignore[return-value]
 
-    Supported forms include ``gpt-6-luna-low``,
-    ``openai/gpt-6-luna:medium``, and ``baseline=openai/gpt-6-luna:medium``.
-    A missing effort uses ``default_effort``. An explicit alias replaces the
-    automatically derived short display name but does not change the API model ID.
+
+def load_model_specs(path: str | Path) -> list[ModelSpec]:
+    """Load model specs from a JSON file, preserving order and repeated entries.
+
+    The document must be a non-empty JSON array. Each element must be an object
+    containing exactly ``model_id`` and ``reasoning_effort``. Model IDs must be
+    fully qualified (include a non-empty provider and model path separated by
+    ``/``), and effort must be explicitly ``low`` or ``medium``.
     """
-    normalized_default = _normalize_effort(
-        default_effort, parameter_name="default_effort"
-    )
-    if not isinstance(text, str):
-        raise TypeError("model qualifier must be a string")
-    qualifier = text.strip()
-    if not qualifier:
-        raise ValueError("model qualifier must not be empty")
-
-    alias: str | None = None
-    if "=" in qualifier:
-        if qualifier.count("=") != 1:
-            raise ValueError("model qualifier may contain only one '='")
-        alias_text, qualifier = qualifier.split("=", 1)
-        alias = alias_text.strip()
-        qualifier = qualifier.strip()
-        if not alias:
-            raise ValueError("model alias must not be empty")
-        if not _ALIAS_RE.fullmatch(alias):
-            raise ValueError(
-                "model alias must start with a letter or digit and contain only "
-                "letters, digits, '.', '_' or '-'"
-            )
-
-    if not qualifier:
-        raise ValueError("model ID must not be empty")
-    if any(character.isspace() for character in qualifier):
-        raise ValueError("model ID must not contain whitespace")
-
-    requested_model, explicit_effort = _split_model_effort(qualifier)
-    effort = explicit_effort if explicit_effort is not None else normalized_default
-    short_model_name = requested_model.rsplit("/", 1)[-1]
-    display_model = alias or (
-        f"{short_model_name}-{effort}" if effort is not None else short_model_name
-    )
-    return ModelSpec(
-        requested_model=requested_model,
-        display_model=display_model,
-        reasoning_effort=effort,
-    )
-
-
-def parse_model_qualifiers(
-    texts: Iterable[str], default_effort: str | None = "low"
-) -> list[ModelSpec]:
-    """Parse a repeatable qualifier list and reject duplicate display names.
-
-    Distinct explicit aliases may deliberately refer to the same model and effort;
-    repeated implicit names or aliases are rejected so leaderboard entries remain
-    distinguishable. Duplicate detection is case-insensitive.
-    """
-    _normalize_effort(default_effort, parameter_name="default_effort")
-    if isinstance(texts, str):
-        raise TypeError("model qualifiers must be an iterable of strings, not a string")
+    source = Path(path)
     try:
-        qualifiers = list(texts)
-    except TypeError as exc:
-        raise TypeError("model qualifiers must be an iterable of strings") from exc
+        data = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid model specs JSON in {source}: {exc.msg}") from exc
+
+    if not isinstance(data, list):
+        raise ValueError("model specs file must contain a JSON array")
+    if not data:
+        raise ValueError("model specs array must not be empty")
 
     specs: list[ModelSpec] = []
-    names_seen: set[str] = set()
-    for text in qualifiers:
-        spec = parse_model_qualifier(text, default_effort=default_effort)
-        normalized_name = spec.display_model.casefold()
-        if normalized_name in names_seen:
-            raise ValueError(
-                f"duplicate model display name or alias: {spec.display_model!r}; "
-                "supply distinct aliases for repeated models"
+    for index, row in enumerate(data):
+        if not isinstance(row, dict):
+            raise ValueError(f"model_specs[{index}] must be an object")
+        fields = set(row)
+        if fields != _REQUIRED_FIELDS:
+            missing = sorted(_REQUIRED_FIELDS - fields)
+            extra = sorted(fields - _REQUIRED_FIELDS)
+            details = []
+            if missing:
+                details.append(f"missing fields: {', '.join(missing)}")
+            if extra:
+                details.append(f"unexpected fields: {', '.join(extra)}")
+            raise ValueError(f"model_specs[{index}] has invalid fields ({'; '.join(details)})")
+        specs.append(
+            ModelSpec(
+                model_id=_validate_model_id(row["model_id"], index=index),
+                reasoning_effort=_validate_effort(
+                    row["reasoning_effort"], index=index
+                ),
             )
-        names_seen.add(normalized_name)
-        specs.append(spec)
+        )
     return specs
