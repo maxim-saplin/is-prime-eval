@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run explicitly configured OpenRouter model IDs and reasoning efforts."""
+"""Run explicit OpenRouter model-ID/reasoning-effort pairs."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
-from model_specs import ModelSpec, load_model_specs
+from model_specs import ModelSpec, parse_model_specs
 from multi_run import ModelRunSpec, run_many
 from openrouter import OpenRouterClient, OpenRouterError
 from progress import ProgressReporter
@@ -57,26 +57,24 @@ def parse_depths(value: str) -> tuple[int, ...]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Evaluate explicit OpenRouter model IDs and reasoning efforts on prime classification."
+        description="Evaluate explicit OpenRouter model IDs and reasoning efforts on prime classification.",
+        allow_abbrev=False,
     )
     parser.add_argument(
         "--model-id",
-        help="Fully qualified OpenRouter ID (author/model), e.g. openai/gpt-6-luna",
-    )
-    parser.add_argument(
-        "--models-file",
-        help="JSON array with one explicit model_id/reasoning_effort object per run",
+        action="append",
+        help="Fully qualified OpenRouter ID (author/model); repeat for parallel runs",
     )
     parser.add_argument(
         "--reasoning-effort",
-        choices=("low", "medium"),
-        help="Required with --model-id; effort is specified per entry in --models-file",
+        action="append",
+        help="Explicit provider effort paired by order with each --model-id; repeat for parallel runs",
     )
     parser.add_argument(
         "--parallelism",
         type=int,
         default=4,
-        help="Maximum model runs in flight for --models-file (default: 4)",
+        help="Maximum model runs in flight when options are repeated (default: 4)",
     )
     parser.add_argument("--depths", type=parse_depths, help="e.g. 4-10 or 4,6,8 (default: 4-10)")
     parser.add_argument(
@@ -94,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum response tokens per request (default: 512)",
     )
     parser.add_argument("--results-dir", default=str(PROJECT_ROOT / "results"))
-    parser.add_argument("--output", help="Explicit JSONL ledger path (one model run only)")
+    parser.add_argument("--output", help="Explicit JSONL ledger path (single run only)")
     parser.add_argument("--resume", help="Resume one JSONL event ledger using its saved manifest")
     parser.add_argument(
         "--dry-run",
@@ -129,27 +127,10 @@ def _settings(args: argparse.Namespace) -> dict:
 
 
 def _load_model_specs(args: argparse.Namespace, parser: argparse.ArgumentParser) -> list[ModelSpec]:
-    if args.model_id and args.models_file:
-        parser.error("choose either --model-id or --models-file, not both")
-    if args.models_file:
-        if args.reasoning_effort is not None:
-            parser.error("--models-file requires reasoning_effort in every JSON entry")
-        try:
-            return load_model_specs(args.models_file)
-        except (OSError, ValueError) as exc:
-            parser.error(str(exc))
-    if not args.model_id:
-        parser.error("--model-id is required unless --models-file is supplied")
-    if args.reasoning_effort is None:
-        parser.error("--reasoning-effort is required; no effort is chosen implicitly")
-    if (
-        "/" not in args.model_id
-        or args.model_id.startswith("/")
-        or args.model_id.endswith("/")
-        or any(character.isspace() for character in args.model_id)
-    ):
-        parser.error("--model-id must be fully qualified (author/model)")
-    return [ModelSpec(args.model_id, args.reasoning_effort)]
+    try:
+        return parse_model_specs(args.model_id, args.reasoning_effort)
+    except (TypeError, ValueError) as exc:
+        parser.error(str(exc))
 
 
 def _config_for(spec: ModelSpec, values: dict) -> RunConfig:
@@ -206,7 +187,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.output,
         args.dry_run,
         args.model_id,
-        args.models_file,
         args.reasoning_effort,
         args.depths is not None,
         args.samples_per_class is not None,
@@ -218,8 +198,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if args.resume and any(run_settings):
         parser.error("--resume uses its saved model/effort/config; do not supply run settings")
-    if args.models_file and args.output:
-        parser.error("--output can only be used with a single --model-id run")
 
     load_dotenv()
     api_key = get_openrouter_key()
@@ -237,8 +215,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         saved_model = saved.get("model", {})
         model_id = str(saved_model.get("model_id") or saved_config.get("model_id") or saved_config.get("requested_model") or "")
         effort = str(saved_model.get("reasoning_effort") or saved_config.get("reasoning_effort") or "")
-        if not model_id or effort not in {"low", "medium"}:
-            parser.error("saved run manifest does not contain an explicit model ID and low/medium effort")
+        if not model_id or not effort:
+            parser.error("saved run manifest does not contain an explicit model ID and effort")
         client = OpenRouterClient(
             api_key,
             timeout=float(saved_config.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)),
@@ -265,6 +243,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result["complete"] else 2
 
     specs = _load_model_specs(args, parser)
+    if args.output and len(specs) > 1:
+        parser.error("--output can only be used with one model ID/effort pair")
     settings = _settings(args)
     configs = [_config_for(spec, settings) for spec in specs]
     catalog_client = OpenRouterClient(api_key, timeout=settings["timeout_seconds"])

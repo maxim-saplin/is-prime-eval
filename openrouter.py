@@ -200,8 +200,8 @@ class OpenRouterClient:
 
     @staticmethod
     def validate_reasoning_effort(model: ModelInfo, effort: str | None) -> None:
-        if effort not in {"low", "medium"}:
-            raise ValueError("reasoning effort must be explicitly set to low or medium")
+        if not isinstance(effort, str) or not effort or effort != effort.strip() or any(ch.isspace() for ch in effort):
+            raise ValueError("reasoning effort must be explicitly specified as a non-empty value")
         supported = set(model.supported_parameters)
         if supported and not ({"reasoning_effort", "reasoning"} & supported):
             raise ValueError(
@@ -216,8 +216,8 @@ class OpenRouterClient:
         reasoning_effort: str,
         max_completion_tokens: int = 512,
     ) -> dict[str, Any]:
-        if reasoning_effort not in {"low", "medium"}:
-            raise ValueError("reasoning_effort must be explicitly set to low or medium")
+        if not isinstance(reasoning_effort, str) or not reasoning_effort or reasoning_effort != reasoning_effort.strip() or any(ch.isspace() for ch in reasoning_effort):
+            raise ValueError("reasoning_effort must be explicitly specified as a non-empty value")
         payload: dict[str, Any] = {
             "model": model_id,
             "messages": [{"role": "user", "content": prompt}],

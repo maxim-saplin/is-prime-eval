@@ -35,7 +35,7 @@ class FakeCatalogClient(OpenRouterClient):
             supported_parameters=("reasoning_effort",),
         )
 
-    def complete(self, model_id, prompt, *, reasoning_effort=None, max_completion_tokens=512):
+    def complete(self, model_id, prompt, *, reasoning_effort, max_completion_tokens=512):
         if self.fail_if_called:
             raise AssertionError("completed-run resume must not dispatch inference")
         type(self).completion_calls += 1
@@ -56,19 +56,20 @@ class FakeCatalogClient(OpenRouterClient):
 class RunCliTests(unittest.TestCase):
     def test_single_run_requires_explicit_separate_model_id_and_effort(self):
         args = build_parser().parse_args(
-            ["--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low"]
+            ["--model-id", "openai/gpt-6-luna", "--reasoning-effort", "high"]
         )
-        self.assertEqual(args.model_id, "openai/gpt-6-luna")
-        self.assertEqual(args.reasoning_effort, "low")
+        self.assertEqual(args.model_id, ["openai/gpt-6-luna"])
+        self.assertEqual(args.reasoning_effort, ["high"])
 
-    def test_old_qualifier_and_alias_syntax_is_rejected(self):
+    def test_old_alias_and_qualifier_syntax_is_rejected(self):
         for argv in (
             ["--model-qualifier", "gpt-6-luna-low"],
-            ["--model", "gpt-6-luna"],
+            ["--model", "openai/gpt-6-luna"],
             ["--model-id", "openai/gpt-6-luna", "--model-alias", "luna-low"],
         ):
-            with self.subTest(argv=argv), self.assertRaises(SystemExit) as caught:
-                build_parser().parse_args(argv)
+            with self.subTest(argv=argv), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as caught:
+                    build_parser().parse_args(argv)
             self.assertEqual(caught.exception.code, 2)
 
     def test_missing_effort_fails_before_catalog_or_inference(self):
@@ -84,53 +85,54 @@ class RunCliTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 2)
         self.assertEqual(FakeCatalogClient.resolved_ids, [])
 
-    def test_models_file_dry_run_keeps_model_and_effort_separate(self):
+    def test_parallel_cli_pairs_repeated_model_ids_and_efforts_by_order(self):
         FakeCatalogClient.completion_calls = 0
         FakeCatalogClient.resolved_ids = []
         output = io.StringIO()
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "models.json"
-            path.write_text(
-                json.dumps(
-                    [
-                        {"model_id": "openai/gpt-6-luna", "reasoning_effort": "low"},
-                        {"model_id": "openai/gpt-6-luna", "reasoning_effort": "medium"},
-                    ]
-                ),
-                encoding="utf-8",
+        with (
+            patch("run.OpenRouterClient", FakeCatalogClient),
+            patch("run.load_dotenv"),
+            patch("run.get_openrouter_key", return_value="test-key"),
+            redirect_stdout(output),
+        ):
+            result = main(
+                [
+                    "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low",
+                    "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "high",
+                    "--parallelism", "2", "--dry-run",
+                ]
             )
-            with (
-                patch("run.OpenRouterClient", FakeCatalogClient),
-                patch("run.load_dotenv"),
-                patch("run.get_openrouter_key", return_value="test-key"),
-                redirect_stdout(output),
-            ):
-                result = main(["--models-file", str(path), "--parallelism", "2", "--dry-run"])
         text = output.getvalue()
         self.assertEqual(result, 0)
         self.assertEqual(FakeCatalogClient.resolved_ids, ["openai/gpt-6-luna", "openai/gpt-6-luna"])
         self.assertEqual(FakeCatalogClient.completion_calls, 0)
         self.assertEqual(text.count("Model ID: openai/gpt-6-luna"), 2)
         self.assertIn("Reasoning effort: low", text)
-        self.assertIn("Reasoning effort: medium", text)
+        self.assertIn("Reasoning effort: high", text)
         hashes = [line.split(": ", 1)[1] for line in text.splitlines() if line.startswith("Dataset SHA-256:")]
         self.assertEqual(len(hashes), 2)
         self.assertEqual(hashes[0], hashes[1])
 
-    def test_models_file_cannot_omit_effort_or_use_unspecified_values(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "models.json"
-            path.write_text('[{"model_id":"openai/gpt-6-luna","reasoning_effort":null}]')
-            with (
-                patch("run.load_dotenv"),
-                patch("run.get_openrouter_key", return_value="test-key"),
-                patch("run.OpenRouterClient", FakeCatalogClient),
-                redirect_stderr(io.StringIO()),
-            ):
-                with self.assertRaises(SystemExit) as caught:
-                    main(["--models-file", str(path)])
-            self.assertEqual(caught.exception.code, 2)
-            self.assertEqual(FakeCatalogClient.resolved_ids, [])
+    def test_effort_list_must_pair_with_model_ids_and_duplicates_fail(self):
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main(["--model-id", "openai/gpt-6-luna", "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low"])
+        # Same identity repeated in one batch is rejected before catalog requests.
+        FakeCatalogClient.resolved_ids = []
+        with (
+            patch("run.OpenRouterClient", FakeCatalogClient),
+            patch("run.load_dotenv"),
+            patch("run.get_openrouter_key", return_value="test-key"),
+            redirect_stderr(io.StringIO()),
+        ):
+            with self.assertRaises(SystemExit):
+                main(
+                    [
+                        "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low",
+                        "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low",
+                    ]
+                )
+        self.assertEqual(FakeCatalogClient.resolved_ids, [])
 
     def test_completed_run_cli_resume_is_a_no_op_with_summary(self):
         model_info = ModelInfo(
@@ -175,6 +177,7 @@ class RunCliTests(unittest.TestCase):
                 code = main(["--resume", str(ledger)])
             self.assertEqual(code, 0)
             self.assertIn("Model ID: openai/gpt-6-luna", output.getvalue())
+            self.assertIn("Reasoning effort: low", output.getvalue())
             self.assertIn("Correct: 2/2", output.getvalue())
             self.assertEqual(ledger.read_bytes(), before)
 
@@ -209,9 +212,8 @@ class RunCliTests(unittest.TestCase):
                     results_dir=Path(temp_dir) / "results",
                 )
             ledger = Path(caught.exception.ledger_path)
-            torn = b'{"event_type":"partial'
             with ledger.open("ab") as stream:
-                stream.write(torn)
+                stream.write(b'{"event_type":"partial')
             output = io.StringIO()
             errors = io.StringIO()
             with (

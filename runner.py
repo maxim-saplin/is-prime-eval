@@ -94,8 +94,13 @@ class RunConfig:
             raise ValueError("timeout_seconds must be positive")
         if self.max_completion_tokens <= 0:
             raise ValueError("max_completion_tokens must be positive")
-        if self.reasoning_effort not in {"low", "medium"}:
-            raise ValueError("reasoning_effort must be explicitly set to low or medium")
+        if (
+            not isinstance(self.reasoning_effort, str)
+            or not self.reasoning_effort
+            or self.reasoning_effort != self.reasoning_effort.strip()
+            or any(character.isspace() for character in self.reasoning_effort)
+        ):
+            raise ValueError("reasoning_effort must be explicitly specified as a non-empty value")
 
 
 def _utc_now() -> str:
@@ -309,8 +314,8 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> None:
     effort = model.get("reasoning_effort") or config.get("reasoning_effort")
     if not isinstance(model_id, str) or "/" not in model_id:
         raise ValueError("saved run has no fully qualified model ID")
-    if effort not in {"low", "medium"}:
-        raise ValueError("saved run has no explicit low/medium reasoning effort")
+    if not isinstance(effort, str) or not effort or effort != effort.strip() or any(ch.isspace() for ch in effort):
+        raise ValueError("saved run has no explicit non-empty reasoning effort")
     expected_payload = {
         "model_id": model_id,
         "reasoning_effort": effort,

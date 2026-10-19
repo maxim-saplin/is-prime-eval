@@ -1,92 +1,65 @@
-"""Load explicit model/run settings from a JSON manifest."""
+"""Validate repeated, separately specified model-ID/effort CLI options."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
-from pathlib import Path
-from typing import Literal
-
-
-ReasoningEffort = Literal["low", "medium"]
-_REQUIRED_FIELDS = frozenset({"model_id", "reasoning_effort"})
-_ALLOWED_EFFORTS = frozenset({"low", "medium"})
+from typing import Sequence
 
 
 @dataclass(frozen=True)
 class ModelSpec:
-    """One explicitly configured model run."""
+    """One OpenRouter model ID and its explicitly provided reasoning effort."""
 
     model_id: str
-    reasoning_effort: ReasoningEffort
+    reasoning_effort: str
 
 
-def _validate_model_id(value: object, *, index: int) -> str:
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"model_specs[{index}].model_id must be a non-empty string")
-    if value != value.strip() or any(character.isspace() for character in value):
-        raise ValueError(f"model_specs[{index}].model_id must not contain whitespace")
-    if "/" not in value or value.startswith("/") or value.endswith("/") or "//" in value:
-        raise ValueError(
-            f"model_specs[{index}].model_id must be a fully qualified ID containing '/'"
-        )
-    return value
+def parse_model_specs(
+    model_ids: Sequence[str] | None,
+    reasoning_efforts: Sequence[str] | None,
+) -> list[ModelSpec]:
+    """Pair repeated CLI values by order; never infer effort from the model ID.
 
-
-def _validate_effort(value: object, *, index: int) -> ReasoningEffort:
-    if not isinstance(value, str) or value not in _ALLOWED_EFFORTS:
-        raise ValueError(
-            f"model_specs[{index}].reasoning_effort must be exactly 'low' or 'medium'"
-        )
-    return value  # type: ignore[return-value]
-
-
-def load_model_specs(path: str | Path) -> list[ModelSpec]:
-    """Load model specs from a JSON file, preserving order and rejecting duplicate runs.
-
-    The document must be a non-empty JSON array. Each element must be an object
-    containing exactly ``model_id`` and ``reasoning_effort``. Model IDs must be
-    fully qualified (include a non-empty provider and model path separated by
-    ``/``), and effort must be explicitly ``low`` or ``medium``.
+    Every `--model-id` must have one corresponding `--reasoning-effort`.
+    Effort values are passed through as supplied, allowing the selected provider
+    and model to determine which non-empty levels they accept.
     """
-    source = Path(path)
-    try:
-        data = json.loads(source.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid model specs JSON in {source}: {exc.msg}") from exc
-
-    if not isinstance(data, list):
-        raise ValueError("model specs file must contain a JSON array")
-    if not data:
-        raise ValueError("model specs array must not be empty")
+    if isinstance(model_ids, str) or isinstance(reasoning_efforts, str):
+        raise TypeError("model IDs and efforts must be supplied as repeated CLI values")
+    ids = list(model_ids or [])
+    efforts = list(reasoning_efforts or [])
+    if not ids:
+        raise ValueError("provide at least one --model-id")
+    if len(ids) != len(efforts):
+        raise ValueError(
+            "provide exactly one --reasoning-effort for each --model-id, in the same order"
+        )
 
     specs: list[ModelSpec] = []
     identities: set[tuple[str, str]] = set()
-    for index, row in enumerate(data):
-        if not isinstance(row, dict):
-            raise ValueError(f"model_specs[{index}] must be an object")
-        fields = set(row)
-        if fields != _REQUIRED_FIELDS:
-            missing = sorted(_REQUIRED_FIELDS - fields)
-            extra = sorted(fields - _REQUIRED_FIELDS)
-            details = []
-            if missing:
-                details.append(f"missing fields: {', '.join(missing)}")
-            if extra:
-                details.append(f"unexpected fields: {', '.join(extra)}")
-            raise ValueError(f"model_specs[{index}] has invalid fields ({'; '.join(details)})")
-        spec = ModelSpec(
-            model_id=_validate_model_id(row["model_id"], index=index),
-            reasoning_effort=_validate_effort(
-                row["reasoning_effort"], index=index
-            ),
-        )
-        identity = (spec.model_id, spec.reasoning_effort)
+    for index, (model_id, effort) in enumerate(zip(ids, efforts)):
+        if not isinstance(model_id, str) or not model_id:
+            raise ValueError(f"model_id at position {index + 1} must be non-empty")
+        if model_id != model_id.strip() or any(character.isspace() for character in model_id):
+            raise ValueError(f"model_id at position {index + 1} must not contain whitespace")
+        if "/" not in model_id or model_id.startswith("/") or model_id.endswith("/") or "//" in model_id:
+            raise ValueError(
+                f"model_id at position {index + 1} must be fully qualified (author/model)"
+            )
+        if not isinstance(effort, str) or not effort or effort != effort.strip():
+            raise ValueError(
+                f"reasoning_effort at position {index + 1} must be explicit and non-empty"
+            )
+        if any(character.isspace() for character in effort):
+            raise ValueError(
+                f"reasoning_effort at position {index + 1} must not contain whitespace"
+            )
+        identity = (model_id, effort)
         if identity in identities:
             raise ValueError(
-                f"duplicate model run identity at model_specs[{index}]: "
-                f"{spec.model_id} with reasoning_effort={spec.reasoning_effort}"
+                f"duplicate model_id/reasoning_effort pair at position {index + 1}: "
+                f"{model_id} / {effort}"
             )
         identities.add(identity)
-        specs.append(spec)
+        specs.append(ModelSpec(model_id, effort))
     return specs

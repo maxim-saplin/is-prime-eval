@@ -59,7 +59,7 @@ Keep the implementation small and split only at useful test seams:
 - `cases.py`: seeded balanced case generation and exact labels.
 - `prompt.py` / `parse.py`: fixed prompt and deterministic label parser.
 - `openrouter.py`: one API adapter, including usage, cost, route and error extraction.
-- `runner.py` / `run.py`: CLI, sequential requests within each model, bounded retries/resume, and bounded parallel execution from an explicit JSON list of `{model_id, reasoning_effort}` settings.
+- `runner.py` / `run.py`: CLI with separate, repeatable `--model-id` and `--reasoning-effort` fields paired by order; sequential requests within each model; bounded retries/resume; bounded parallel model execution. No model/effort suffix parsing or display alias input.
 - `progress.py` / `multi_run.py`: per-model progress, elapsed time, ETA and observed completion tokens/second; separate batch elapsed time.
 - `report.py`: summaries derived from saved results, without re-querying models.
 - `tests/`: offline tests with a fake OpenRouter response; no API key/network needed.
@@ -70,8 +70,7 @@ Write an append-only JSONL event ledger and hold an OS advisory lock for the ful
 
 1. Implement and test the benchmark contract: depth ranges, seeded balanced/deduplicated cases, exact labels, prompt and parser behavior.
 2. Add the OpenRouter adapter and both cost paths. Mock responses with/without usage, reported cost, cache details, model routing and failures; test the normalized-cost formula and missing-data behavior.
-3. Add the runner CLI, attempt-level JSONL logging, retries, resume, per-model progress/ETA/token throughput, and explicit model-ID/effort configuration. Parallelize model runs only; keep each model's requests sequential and concurrency bounded. Never infer an effort suffix from a model ID or silently default the effort.
-4. Add the text summary, README usage/API-key guidance, and an opt-in live smoke test (small case count, one model).
+3. Add the runner CLI, attempt-level JSONL logging, retries, resume, per-model progress/ETA/token throughput, and separate explicit model-ID/effort fields. Accept repeated CLI flags (one effort per model ID in matching order); reject missing efforts, duplicate identities and old suffix/alias syntax before preflight. Parallelize model runs only; keep each model's requests sequential and concurrency bounded. Never infer or default effort; pass the user-provided value through for provider validation.4. Add the text summary, README usage/API-key guidance, and an opt-in live smoke test (small case count, one model).
 
 MVP is ready when offline tests verify generation, parsing/scoring, retry/resume, JSONL replay, both cost calculations, torn-tail recovery, an interrupted attempt with unknown spend, per-model progress, parallel model orchestration, shared case hashes, and exclusive ledger ownership. Tests must not call the real API or require a key. Progress must count only persisted terminal cases, report observed completion tokens per wall-clock elapsed time (not streaming token speed), and keep per-model elapsed/ETA separate from batch elapsed. Reports keep both dollar totals distinct with explicit missing-cost coverage.
 

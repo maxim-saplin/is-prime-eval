@@ -44,28 +44,24 @@ A live run keeps the two settings separate:
   --reasoning-effort low
 ```
 
-Both **Model ID** and **Reasoning effort** must be supplied; no model or effort is silently selected. Supported efforts are `low` and `medium`. Defaults for the test itself are depths `4-10`, 10 examples of each class per depth, seed `2026`, three total API attempts per case, and a 512-token completion limit. Retries are only for transient/API errors; invalid or truncated answers are recorded and are not retried for a better answer.
+Both fields are required; no model or effort is silently selected. The effort string is passed unchanged to OpenRouter/the model. Supported values depend on the selected model/provider; if a value is rejected, the request error is recorded rather than silently substituted.
+
+Defaults for the test itself are depths `4-10`, 10 examples of each class per depth, seed `2026`, three total API attempts per case, and a 512-token completion limit. Retries are only for transient/API errors; invalid or truncated answers are recorded and are not retried for a better answer.
 
 ## Parallel model runs
 
-For a batch, use a JSON file with separate, explicit fields—never put effort suffixes in model IDs or aliases:
-
-```json
-[
-  {"model_id": "openai/gpt-6-luna", "reasoning_effort": "low"},
-  {"model_id": "openai/gpt-6-luna", "reasoning_effort": "medium"}
-]
-```
-
-Run the batch with:
+Repeat `--model-id` and `--reasoning-effort` for every run. The first effort pairs with the first model ID, the second with the second, and so on. This uses CLI arguments only—no external model-list file or model-name suffix parsing:
 
 ```sh
-.venv/bin/python run.py --models-file models.json --parallelism 2
+.venv/bin/python run.py \
+  --model-id openai/gpt-6-luna --reasoning-effort low \
+  --model-id openai/gpt-6-luna --reasoning-effort high \
+  --parallelism 2
 ```
 
-Each entry must contain exactly `model_id` and `reasoning_effort`; IDs must be fully qualified and efforts must be explicitly `low` or `medium`. The whole file is validated before inference. The case set is generated and saved once before workers start, then shared by every model. `--parallelism` bounds the number of model runs in flight; requests within a model remain sequential. Repeated runs of the same ID and effort are separate CLI runs with distinct run IDs.
+A missing effort, extra effort, non-qualified model ID, or duplicate Model ID/Effort pair is rejected before inference. Each model receives the same frozen cases. `--parallelism` bounds the number of model runs in flight; requests within each model remain sequential. To repeat the same Model ID/Effort as a separate measurement, run it again in a separate command; each run has its own ID and leaderboard row.
 
-Progress is written to **stderr**, separately keyed by Model ID and Effort: completed/scheduled cases, elapsed time, estimated remaining time, observed completion tokens per second, and correct/incorrect counts. A heartbeat refreshes elapsed time/ETA during slow non-streaming requests. Token speed is observed completion tokens divided by wall-clock time—not live generation speed—and completion totals include reasoning tokens when OpenRouter reports them. Per-model elapsed/ETA includes request time and retry backoff; a separate line reports total batch elapsed time. On Ctrl-C in a parallel batch, queued runs are recorded as pending and no new case/retry requests are dispatched; an already in-flight request is allowed to finish and be logged before workers stop.
+Progress is written to **stderr**, with Model ID and Effort shown separately: completed/scheduled cases, elapsed time, estimated remaining time, observed completion tokens per second, and correct/incorrect counts. A heartbeat refreshes elapsed time/ETA during slow non-streaming requests. Token speed is observed completion tokens divided by wall-clock time—not live generation speed—and completion totals include reasoning tokens when OpenRouter reports them. Per-model elapsed/ETA includes request time and retry backoff; a separate line reports total batch elapsed time. On Ctrl-C in a parallel batch, queued runs are saved as pending and no new case/retry requests are dispatched; an already in-flight request is allowed to finish and be logged before workers stop.
 
 ## Resume
 
@@ -77,19 +73,19 @@ To resume an interrupted run, pass its JSONL event ledger. The saved manifest su
 
 ## Leaderboard and run artifacts
 
-After one or more runs, print a leaderboard for all ledgers in `results/`, or a specific cohort/run:
+Print a leaderboard for all run ledgers in `results/`, or a specific run:
 
 ```sh
 .venv/bin/python report.py --results-dir results --output leaderboard.md
 .venv/bin/python report.py results/<run-ledger>.jsonl --output leaderboard.md
 ```
 
-The report has separate **Model ID** and **Effort** columns, a provider-route column, and a short run ID. Thus different efforts of the same model and repeated runs are distinguishable without encoding settings in a model alias. It shows Correct/Incorrect counts and percentages, results by digit (including prime and non-prime questions correctly identified), tokens, and two per-run costs:
+The report has separate **Model ID** and **Reasoning effort** columns, a provider-route column, and a short run ID. Different efforts of the same model and repeated runs are distinct rows without encoding settings into model names. It shows Correct/Incorrect counts and percentages, results by digit (including prime and non-prime questions correctly identified), tokens, and two per-run costs:
 
 - **Provider-reported cost:** the amount OpenRouter reports.
 - **Estimated cost without cache discounts:** reported token counts priced at ordinary uncached rates, as if every prompt token were uncached.
 
-Missing/partial cost coverage is labeled, never shown as `$0`. Both totals include retries. Run artifacts are ignored by Git; the JSONL event ledger is authoritative for attempt/run status, while the manifest is the frozen Model ID/Effort/dataset/pricing configuration. Delayed OpenRouter generation metadata can be fetched without repeating inference:
+Missing/partial cost coverage is labeled, never shown as `$0`. Both totals include retries. Run artifacts are ignored by Git; the JSONL event ledger is authoritative for attempt/run status, while the manifest stores the separate Model ID, Effort, dataset and pricing configuration. Delayed OpenRouter generation metadata can be fetched without repeating inference:
 
 ```sh
 .venv/bin/python enrich_generations.py results/<run-ledger>.jsonl
