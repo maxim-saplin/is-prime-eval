@@ -1,6 +1,9 @@
 import io
+import os
+import re
 import time
 import unittest
+from unittest.mock import patch
 
 from progress import ProgressReporter
 
@@ -30,7 +33,7 @@ class ProgressReporterTests(unittest.TestCase):
         text = output.getvalue()
         self.assertIn("Model ID: openai/gpt-6-luna | Effort: low", text)
         self.assertIn("1/10", text)
-        self.assertIn("elapsed", text)
+        self.assertIn("Elapsed", text)
         self.assertIn("ETA", text)
         self.assertIn("Output", text)
         self.assertIn("tok/s", text)
@@ -131,6 +134,25 @@ class ProgressReporterTests(unittest.TestCase):
         time.sleep(0.05)
         second = reporter._model_lines(key, reporter._models[key], 79)
         self.assertEqual(first, second)
+        reporter.close()
+
+    def test_80_column_cancellation_header_and_every_tty_row_stay_within_width(self):
+        output = TTYStringIO()
+        reporter = ProgressReporter(stream=output, force_tty=True)
+        with patch("progress.shutil.get_terminal_size", return_value=os.terminal_size((80, 24))):
+            reporter.set_batch_total(1)
+            reporter.register_model("openai/gpt-6-luna", "custom-effort", 140)
+            reporter.set_batch_status("cancel requested; no new dispatch")
+        rows = []
+        for raw in output.getvalue().splitlines():
+            clean = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw).replace("\r", "")
+            if clean:
+                rows.append(clean)
+        self.assertTrue(rows)
+        self.assertTrue(all(len(row) <= 79 for row in rows), rows)
+        self.assertIn("cancel requested", " ".join(rows))
+        self.assertIn("ETA", " ".join(rows))
+        self.assertIn("tok/s", " ".join(rows))
         reporter.close()
 
     def test_heartbeat_reports_a_slow_nonstreaming_request(self):

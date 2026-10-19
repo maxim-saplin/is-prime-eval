@@ -181,7 +181,7 @@ class MultiRunTests(unittest.TestCase):
             self.assertEqual(summaries[0]["counts"]["pending"] + summaries[0]["counts"]["not_attempted"], 1)
             self.assertEqual(summaries[1]["counts"]["attempted_cases"], 0)
             self.assertEqual(summaries[1]["counts"]["not_attempted"], 2)
-            self.assertIn("cancellation requested", output.getvalue())
+            self.assertIn("cancel requested", output.getvalue())
             reporter.close()
 
 

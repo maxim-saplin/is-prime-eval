@@ -132,9 +132,7 @@ def run_many(
     except KeyboardInterrupt:
         interrupted = True
         cancellation.set()
-        notice = (
-            "cancellation requested; no new requests; waiting for in-flight responses"
-        )
+        notice = "cancel requested"
         if on_progress is not None and hasattr(on_progress, "set_batch_status"):
             on_progress.set_batch_status(notice)
         else:

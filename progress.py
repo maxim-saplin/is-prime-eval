@@ -264,11 +264,14 @@ class ProgressReporter:
         total = self._batch_total if self._batch_total is not None else len(self._models)
         batch_elapsed = _duration(time.monotonic() - self._batch_started)
         header_status = self._batch_notice or status
-        lines = [
-            f"Prime eval | model runs {len(self._finished_models)}/{total} complete "
-            f"| batch elapsed {batch_elapsed} | {header_status}"
-        ]
         width = max(40, shutil.get_terminal_size((120, 24)).columns - 1)
+        header = (
+            f"Prime eval | {len(self._finished_models)}/{total} done "
+            f"| batch elapsed {batch_elapsed} | {header_status}"
+        )
+        # A long cancellation/error notice must not wrap and shift the cursor
+        # accounting used by the in-place TTY redraw.
+        lines = [_terminal_text(header, width)]
         for key, state in self._models.items():
             lines.extend(self._model_lines(key, state, width))
 
