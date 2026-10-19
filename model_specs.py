@@ -42,7 +42,7 @@ def _validate_effort(value: object, *, index: int) -> ReasoningEffort:
 
 
 def load_model_specs(path: str | Path) -> list[ModelSpec]:
-    """Load model specs from a JSON file, preserving order and repeated entries.
+    """Load model specs from a JSON file, preserving order and rejecting duplicate runs.
 
     The document must be a non-empty JSON array. Each element must be an object
     containing exactly ``model_id`` and ``reasoning_effort``. Model IDs must be
