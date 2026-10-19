@@ -72,6 +72,7 @@ class ProgressReporter:
         self._heartbeat_stop = threading.Event()
         self._heartbeat_thread: threading.Thread | None = None
         self._rendered_lines = 0
+        self._active_model_limit: int | None = None
         self._non_tty_last_completed: dict[ProgressKey, int] = {}
 
     def __enter__(self) -> "ProgressReporter":
@@ -85,6 +86,12 @@ class ProgressReporter:
         thread = self._heartbeat_thread
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=self._heartbeat_interval + 1)
+
+    def set_active_model_limit(self, limit: int) -> None:
+        if limit <= 0:
+            raise ValueError("active model limit must be positive")
+        with self._lock:
+            self._active_model_limit = limit
 
     def set_batch_total(self, total: int) -> None:
         if total < 0:
@@ -264,7 +271,8 @@ class ProgressReporter:
         total = self._batch_total if self._batch_total is not None else len(self._models)
         batch_elapsed = _duration(time.monotonic() - self._batch_started)
         header_status = self._batch_notice or status
-        width = max(40, shutil.get_terminal_size((120, 24)).columns - 1)
+        terminal = shutil.get_terminal_size((120, 24))
+        width = max(40, terminal.columns - 1)
         header = (
             f"Prime eval | {len(self._finished_models)}/{total} done "
             f"| batch elapsed {batch_elapsed} | {header_status}"
@@ -272,17 +280,50 @@ class ProgressReporter:
         # A long cancellation/error notice must not wrap and shift the cursor
         # accounting used by the in-place TTY redraw.
         lines = [_terminal_text(header, width)]
-        for key, state in self._models.items():
-            lines.extend(self._model_lines(key, state, width))
 
         if self._is_tty:
+            active_models = [
+                (key, state)
+                for key, state in self._models.items()
+                if key not in self._finished_models
+            ]
+            available_model_lines = max(0, terminal.lines - 2)
+            requested_limit = (
+                self._active_model_limit
+                if self._active_model_limit is not None
+                else len(active_models)
+            )
+            model_limit = min(requested_limit, available_model_lines // 2)
+            hidden_count = 0
+            if len(active_models) > model_limit:
+                model_limit = min(model_limit, max(0, (available_model_lines - 1) // 2))
+                hidden_count = len(active_models) - model_limit
+            for key, state in active_models[:model_limit]:
+                lines.extend(self._model_lines(key, state, width))
+            visible_count = min(len(active_models), model_limit)
+            lines.extend([""] * (2 * (model_limit - visible_count)))
+            if hidden_count:
+                lines.append(_terminal_text(
+                    f"{hidden_count} active model(s) not shown", width
+                ))
+
+            # Reserve a fixed dashboard height so starting/finishing workers
+            # never leaves stale rows or grows a scrollable list of completed runs.
+            reserved_lines = max(self._rendered_lines, len(lines))
+            if reserved_lines > terminal.lines - 1:
+                reserved_lines = max(1, terminal.lines - 1)
+                lines = lines[:reserved_lines]
             if self._rendered_lines:
                 self.stream.write(f"\x1b[{self._rendered_lines}A")
-            for line in lines:
+            for index in range(reserved_lines):
+                line = lines[index] if index < len(lines) else ""
                 self.stream.write("\r\x1b[2K" + line + "\n")
             self.stream.flush()
-            self._rendered_lines = len(lines)
+            self._rendered_lines = reserved_lines
             return
+
+        for key, state in self._models.items():
+            lines.extend(self._model_lines(key, state, width))
 
         # A redirected log cannot be redrawn in place; emit periodic summaries.
         emit = (

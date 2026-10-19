@@ -79,6 +79,31 @@ class ProgressReporterTests(unittest.TestCase):
         self.assertIn("\x1b[3A", text)
         self.assertIn("Model ID: openai/gpt-6-luna | Effort: low", text)
 
+    def test_many_parallel_models_stay_within_a_24_row_tty_viewport(self):
+        output = TTYStringIO()
+        reporter = ProgressReporter(stream=output, force_tty=True)
+        with patch("progress.shutil.get_terminal_size", return_value=os.terminal_size((80, 24))):
+            reporter.set_active_model_limit(4)
+            reporter.set_batch_total(13)
+            self.assertEqual(reporter._rendered_lines, 9)
+            for index in range(4):
+                reporter.register_model(f"provider/model-{index}", "low", 140)
+            self.assertEqual(reporter._rendered_lines, 9)
+
+            for index in range(4):
+                reporter.model_finished(f"provider/model-{index}", "low", success=True)
+            for index in range(4, 13):
+                reporter.register_model(f"provider/model-{index}", "low", 140)
+                reporter.model_finished(f"provider/model-{index}", "low", success=True)
+
+        self.assertLessEqual(reporter._rendered_lines, 22)
+        self.assertEqual(len(reporter._finished_models), 13)
+        self.assertIn("\x1b[9A", output.getvalue())
+        final_frame = output.getvalue().rsplit("\x1b[9A", 1)[1]
+        self.assertIn("13/13 done", final_frame)
+        self.assertNotIn("Model ID:", final_frame)
+        reporter.close()
+
     def test_80_column_rows_keep_eta_and_token_rate_visible(self):
         reporter = ProgressReporter(stream=io.StringIO(), force_tty=True)
         reporter.register_model("openai/gpt-6-luna", "high", 140)

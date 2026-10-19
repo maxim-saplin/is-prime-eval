@@ -71,10 +71,14 @@ def run_many(
     identities = [(spec.config.model_id, spec.config.reasoning_effort) for spec in specs]
     if len(set(identities)) != len(identities):
         raise ValueError("parallel model_id/reasoning_effort identities must be unique")
+    worker_count = min(parallelism, len(specs))
 
     prepared_dataset = prepare_case_dataset(results_dir=results_dir, config=first_config)
-    if on_progress is not None and hasattr(on_progress, "set_batch_total"):
-        on_progress.set_batch_total(len(specs))
+    if on_progress is not None:
+        if hasattr(on_progress, "set_active_model_limit"):
+            on_progress.set_active_model_limit(worker_count)
+        if hasattr(on_progress, "set_batch_total"):
+            on_progress.set_batch_total(len(specs))
     cancellation = threading.Event()
     results: list[dict[str, Any] | None] = [None] * len(specs)
 
@@ -105,7 +109,6 @@ def run_many(
                 success=bool(result and result.get("complete")),
             )
 
-    worker_count = min(parallelism, len(specs))
     pool = ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="prime-model")
     futures: dict[Future[tuple[int, dict[str, Any]]], int] = {}
     futures_by_index: dict[int, Future[tuple[int, dict[str, Any]]]] = {}
