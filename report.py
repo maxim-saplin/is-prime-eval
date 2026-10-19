@@ -43,7 +43,7 @@ def _merge_attempts(events: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, 
         if event_type == "attempt_started":
             state.update(event)
             state["status"] = "started"
-        elif event_type in {"attempt_response", "attempt_failed", "attempt_interrupted"}:
+        elif event_type in {"attempt_response", "attempt_failed", "attempt_interrupted", "attempt_cancelled_before_dispatch"}:
             state.update(event)
             state["status"] = event_type.removeprefix("attempt_")
         elif event_type == "attempt_cost_update":
@@ -85,6 +85,8 @@ def _case_outcomes(
 
     attempts_by_case: dict[str, list[Mapping[str, Any]]] = {}
     for state in attempts.values():
+        if state.get("status") == "cancelled_before_dispatch":
+            continue
         case_id = str(state.get("case_id", ""))
         attempts_by_case.setdefault(case_id, []).append(state)
 
@@ -141,7 +143,11 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["_manifest_path"] = str(manifest_path)
     events, torn_bytes = load_events(ledger, repair_torn_tail=False)
-    attempts = _merge_attempts(events)
+    attempts = {
+        attempt_id: state
+        for attempt_id, state in _merge_attempts(events).items()
+        if state.get("status") != "cancelled_before_dispatch"
+    }
     outcomes, complete = _case_outcomes(manifest, events, attempts)
     scheduled = len(outcomes)
     counts = {
@@ -309,9 +315,10 @@ def _cohort_key(summary: Mapping[str, Any]) -> tuple[Any, ...]:
         summary.get("prompt_version"),
         tuple(summary.get("depths", [])),
         summary.get("samples_per_class"),
-        summary.get("reasoning_effort"),
         config.get("max_completion_tokens"),
         config.get("max_attempts"),
+        config.get("retry_delay_seconds"),
+        config.get("timeout_seconds"),
     )
 
 
@@ -324,15 +331,15 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
 
     lines = ["# Prime-eval leaderboard", ""]
     for group_key, group in sorted(groups.items(), key=lambda item: str(item[0])):
-        dataset_id, prompt_version, depths, samples_per_class, effort, max_tokens, max_attempts = group_key
+        dataset_id, prompt_version, depths, samples_per_class, max_tokens, max_attempts, retry_delay, timeout = group_key
         lines.extend(
             [
                 f"## Dataset `{dataset_id}`",
                 "",
                 f"Prompt: `{prompt_version}` · Digits: {', '.join(map(str, depths))} · "
                 f"Samples: {samples_per_class} prime + {samples_per_class} non-prime per digit · "
-                f"Reasoning: {effort or 'default'} · Max attempts: {max_attempts} · "
-                f"Max completion tokens: {max_tokens}",
+                f"Max attempts: {max_attempts} · Max completion tokens: {max_tokens} · "
+                f"Timeout: {timeout}s · Retry delay: {retry_delay}s · Effort shown per model",
                 "",
             ]
         )
@@ -341,6 +348,8 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
             key=lambda run: (
                 -run["counts"]["correct"] / max(1, run["scheduled"]),
                 run["display_model"].casefold(),
+                str(run.get("reasoning_effort") or ""),
+                str(run.get("run_id") or ""),
             ),
         )
         incomplete_runs = [run for run in group if not run["complete"]]
@@ -349,28 +358,30 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                 [
                     "### Model results",
                     "",
-                    "| Rank | Model | Answered / scheduled | Correct | Incorrect | Incorrect reasons |",
-                    "|---:|---|---:|---:|---:|---|",
+                    "| Rank | Model | Effort | Run | Answered / scheduled | Correct | Incorrect | Incorrect reasons |",
+                    "|---:|---|---|---|---:|---:|---:|---|",
                 ]
             )
             for rank, run in enumerate(complete_runs, start=1):
                 counts = run["counts"]
                 total = run["scheduled"]
                 lines.append(
-                    f"| {rank} | {_model_label(run)} | "
+                    f"| {rank} | {_model_label(run)} | {run.get('reasoning_effort') or 'default'} | "
+                    f"{str(run.get('run_id') or '')[:8]} | "
                     f"{counts['answered_cases']}/{total} | "
                     f"{_percentage(counts['correct'], total)} | "
                     f"{_percentage(counts['incorrect'], total)} | "
                     f"{_incorrect_breakdown(counts)} |"
                 )
-            lines.extend(["", "### Results by digit", "", "| Model | Digits | Correct | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |", "|---|---:|---:|---:|---:|---:|---:|"])
+            lines.extend(["", "### Results by digit", "", "| Model | Effort | Run | Digits | Correct | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |", "|---|---|---|---:|---:|---:|---:|---:|---:|"])
             for run in complete_runs:
                 for depth in run["depths"]:
                     cell = run["by_depth"][depth]
                     scheduled = cell["scheduled"]
                     incorrect = cell["incorrect"]
                     lines.append(
-                        f"| {_model_label(run)} | {depth} | "
+                        f"| {_model_label(run)} | {run.get('reasoning_effort') or 'default'} | "
+                        f"{str(run.get('run_id') or '')[:8]} | {depth} | "
                         f"{_percentage(cell['correct'], scheduled)} | "
                         f"{_percentage(incorrect, scheduled)} | "
                         f"{cell['truncated']} | "
@@ -382,13 +393,14 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                     "",
                     "### Cost per run",
                     "",
-                    "| Model | Prompt / completion tokens | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
-                    "|---|---:|---:|---:|",
+                    "| Model | Effort | Run | Prompt / completion tokens | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
+                    "|---|---|---|---:|---:|---:|",
                 ]
             )
             for run in complete_runs:
                 lines.append(
-                    f"| {_model_label(run)} | "
+                    f"| {_model_label(run)} | {run.get('reasoning_effort') or 'default'} | "
+                    f"{str(run.get('run_id') or '')[:8]} | "
                     f"{run['prompt_tokens']:,} / {run['completion_tokens']:,} "
                     f"({run['token_usage_known_attempts']}/{run['attempt_count']} attempts with token counts) | "
                     f"{run['provider_cost_cell']} | {run['normalized_cost_cell']} |"
@@ -399,17 +411,21 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                     "",
                     "### Incomplete runs (not ranked)",
                     "",
-                    "| Model | Scheduled | Attempted cases | Answered | Terminal no-response | Pending | Never attempted |",
-                    "|---|---:|---:|---:|---:|---:|---:|",
+                    "| Model | Effort | Run | Scheduled | Correct | Incorrect terminal items | Attempted cases | Answered | Terminal no-response | Pending | Never attempted | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
+                    "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
                 ]
             )
             for run in incomplete_runs:
                 counts = run["counts"]
                 lines.append(
-                    f"| {_model_label(run)} | {run['scheduled']} | "
+                    f"| {_model_label(run)} | {run.get('reasoning_effort') or 'default'} | "
+                    f"{str(run.get('run_id') or '')[:8]} | {run['scheduled']} | "
+                    f"{_percentage(counts['correct'], run['scheduled'])} | "
+                    f"{_percentage(counts['incorrect'], run['scheduled'])} | "
                     f"{counts['attempted_cases']} | {counts['answered_cases']} | "
                     f"{counts['no_response']} | {counts['pending']} | "
-                    f"{counts['not_attempted']} |"
+                    f"{counts['not_attempted']} | {run['provider_cost_cell']} | "
+                    f"{run['normalized_cost_cell']} |"
                 )
         lines.append("")
     lines.extend(

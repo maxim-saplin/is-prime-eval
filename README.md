@@ -58,7 +58,20 @@ Default benchmark run (140 cases per model):
 
 Reasoning effort can be set to `low` or `medium`. Defaults are depths `4-10`, 10 examples of each class per depth, seed `2026`, three total API attempts per case, and a 512-token completion limit. A retry is only for transient/API errors; an invalid or truncated model answer is recorded as such and is not retried for a better answer.
 
-To resume a run, use its JSONL event ledger. The saved manifest fixes the model, reasoning setting, prompt/parser versions, dataset and pricing rates; conflicting overrides are rejected:
+Progress is written to **stderr**, separately for each model: completed/scheduled cases, elapsed time, estimated time remaining, observed completion tokens per second, and correct/incorrect counts. A periodic heartbeat refreshes elapsed/ETA while a slow request is in flight. Requests are non-streaming, so token speed is observed completion tokens divided by elapsed wall time—not live generation speed. Completion-token totals include reasoning tokens when OpenRouter reports them. Per-model elapsed/ETA includes request time and retry delays; a separate batch line reports total elapsed time. On Ctrl-C in a parallel batch, queued runs are recorded as pending and no new case/retry requests are started; an already in-flight request is allowed to finish and be logged before workers stop.
+
+Run multiple models concurrently with repeatable `--model-qualifier` options. Qualifiers accept `MODEL-low`, `MODEL:medium`, or `ALIAS=MODEL:low`; all models use the same seed and frozen cases. `--parallelism` bounds the number of model runs in flight; requests within each model remain sequential:
+
+```sh
+.venv/bin/python run.py \
+  --model-qualifier gpt-6-luna-low \
+  --model-qualifier gpt-6-luna:medium \
+  --parallelism 2
+```
+
+To deliberately run the same model/effort twice, give the runs distinct aliases, for example `--model-qualifier low-a=gpt-6-luna:low --model-qualifier low-b=gpt-6-luna:low`. Each run gets its own ledger and leaderboard row; the report includes a short run ID so repeats are distinguishable.
+
+To resume a run, use its JSONL event ledger. The saved manifest fixes the model, reasoning setting, prompt/parser versions, dataset and pricing rates; conflicting overrides are rejected. An OS advisory lock prevents two processes from owning the same ledger at once and releases automatically if a process exits:
 
 ```sh
 .venv/bin/python run.py --resume results/gpt-6-luna-low_....jsonl
