@@ -1,7 +1,14 @@
 from collections import Counter
 import unittest
 
-from cases import Case, COMPOSITE, PRIME, generate_cases, is_prime
+from cases import (
+    CASE_GENERATOR_VERSION,
+    Case,
+    COMPOSITE,
+    PRIME,
+    generate_cases,
+    is_prime,
+)
 
 
 class PrimalityOracleTests(unittest.TestCase):
@@ -36,6 +43,9 @@ class PrimalityOracleTests(unittest.TestCase):
 
 
 class CaseGenerationTests(unittest.TestCase):
+    def test_generator_version_is_stable(self):
+        self.assertEqual(CASE_GENERATOR_VERSION, "v1")
+
     def test_generate_cases_is_balanced_unique_and_well_formed(self):
         cases = generate_cases(depths=[4, 5], samples_per_class=4, seed=12345)
 
