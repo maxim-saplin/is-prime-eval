@@ -28,6 +28,21 @@ EXPECTED_PAIRS = [
 
 
 class BatchScriptTests(unittest.TestCase):
+    def test_14_pair_script_is_executable_and_launches_directly_without_network(self):
+        script = PROJECT_ROOT / "scripts" / "run_14_pair_sweep.sh"
+        self.assertTrue(os.access(script, os.X_OK), "launcher must be executable")
+        completed = subprocess.run(
+            [str(script), "--invalid-offline-launch-check"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("Usage:", completed.stderr)
+        self.assertNotIn("Mode:", completed.stdout)
+
     def test_14_pair_script_is_explicit_safe_and_targets_repo_results(self):
         script_path = PROJECT_ROOT / "scripts" / "run_14_pair_sweep.sh"
         text = script_path.read_text(encoding="utf-8")
@@ -86,18 +101,9 @@ class BatchScriptTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 2)
         self.assertIn("immutable partial-run archive", completed.stderr)
 
-    def test_old_13_pair_script_fails_closed(self):
+    def test_old_13_pair_script_is_removed(self):
         old_script = PROJECT_ROOT / "scripts" / "run_13_pair_sweep.sh"
-        completed = subprocess.run(
-            ["bash", str(old_script)],
-            cwd=PROJECT_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        self.assertEqual(completed.returncode, 2)
-        self.assertIn("superseded", completed.stderr)
+        self.assertFalse(old_script.exists(), "superseded launcher must not remain runnable")
 
     def test_live_script_lock_rejects_overlapping_batches_with_different_dirs(self):
         if not shutil.which("flock"):
