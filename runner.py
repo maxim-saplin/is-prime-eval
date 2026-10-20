@@ -37,8 +37,6 @@ DEFAULT_MAX_RETRIES = 5
 DEFAULT_MAX_ATTEMPTS = DEFAULT_MAX_RETRIES + 1
 DEFAULT_RETRY_DELAY_SECONDS = 1.0
 DEFAULT_RETRY_JITTER_FRACTION = 0.2
-DEFAULT_TIMEOUT_SECONDS = 90.0
-DEFAULT_MAX_COMPLETION_TOKENS = 512
 DEFAULT_MIN_REQUEST_INTERVAL_SECONDS = 4.0
 DEFAULT_429_COOLDOWN_SECONDS = 60.0
 RUN_SCHEMA_VERSION = 1
@@ -71,15 +69,15 @@ class PreparedDataset:
 @dataclass(frozen=True)
 class RunConfig:
     model_id: str
-    reasoning_effort: str
+    reasoning_effort: str | None
+    timeout_seconds: float
     depths: tuple[int, ...] = DEFAULT_DEPTHS
     samples_per_class: int = DEFAULT_SAMPLES_PER_CLASS
     seed: int = DEFAULT_SEED
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     retry_delay_seconds: float = DEFAULT_RETRY_DELAY_SECONDS
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
-    max_completion_tokens: int = DEFAULT_MAX_COMPLETION_TOKENS
-    min_request_interval_seconds: float = 0.0
+    max_completion_tokens: int | None = None
+    min_request_interval_seconds: float = DEFAULT_MIN_REQUEST_INTERVAL_SECONDS
 
     def validate(self) -> None:
         if not isinstance(self.model_id, str) or not self.model_id.strip():
@@ -98,16 +96,20 @@ class RunConfig:
             raise ValueError("max_attempts must be positive")
         if self.retry_delay_seconds < 0:
             raise ValueError("retry_delay_seconds cannot be negative")
-        if self.timeout_seconds <= 0:
-            raise ValueError("timeout_seconds must be positive")
-        if self.max_completion_tokens <= 0:
-            raise ValueError("max_completion_tokens must be positive")
+        if not math.isfinite(self.timeout_seconds) or self.timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be finite and explicitly positive")
+        if self.max_completion_tokens is not None and (
+            not isinstance(self.max_completion_tokens, int)
+            or isinstance(self.max_completion_tokens, bool)
+            or self.max_completion_tokens <= 0
+        ):
+            raise ValueError("max_completion_tokens must be a positive integer when explicitly capped")
         if (
             not math.isfinite(self.min_request_interval_seconds)
             or self.min_request_interval_seconds < 0
         ):
             raise ValueError("min_request_interval_seconds must be finite and non-negative")
-        if (
+        if self.reasoning_effort is not None and (
             not isinstance(self.reasoning_effort, str)
             or not self.reasoning_effort
             or self.reasoning_effort != self.reasoning_effort.strip()
@@ -336,12 +338,35 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> None:
     pricing = manifest.get("pricing")
     if not all(isinstance(item, Mapping) for item in (model, config, prompt, dataset, pricing)):
         raise ValueError("run manifest is missing required configuration")
+    if "timeout_seconds" not in config:
+        raise ValueError("saved run manifest does not record its timeout policy; refusing resume")
+    saved_timeout = config.get("timeout_seconds")
+    if (
+        not isinstance(saved_timeout, (int, float))
+        or isinstance(saved_timeout, bool)
+        or not math.isfinite(saved_timeout)
+        or saved_timeout <= 0
+    ):
+        raise ValueError("saved run manifest has an invalid timeout policy")
+    if "max_completion_tokens" not in config:
+        raise ValueError(
+            "saved run manifest does not record its completion-token-cap policy; refusing resume"
+        )
+    saved_cap = config.get("max_completion_tokens")
+    if saved_cap is not None and (
+        not isinstance(saved_cap, int) or isinstance(saved_cap, bool) or saved_cap <= 0
+    ):
+        raise ValueError("saved run manifest has an invalid completion-token cap")
     model_id = model.get("model_id") or model.get("requested_id")
-    effort = model.get("reasoning_effort") or config.get("reasoning_effort")
+    effort = model.get("reasoning_effort", config.get("reasoning_effort"))
     if not isinstance(model_id, str) or "/" not in model_id:
         raise ValueError("saved run has no fully qualified model ID")
-    if not isinstance(effort, str) or not effort or effort != effort.strip() or any(ch.isspace() for ch in effort):
-        raise ValueError("saved run has no explicit non-empty reasoning effort")
+    if "reasoning_effort" not in model and "reasoning_effort" not in config:
+        raise ValueError("saved run has no reasoning effort setting (expected a value or null)")
+    if effort is not None and (not isinstance(effort, str) or not effort or effort != effort.strip() or any(ch.isspace() for ch in effort)):
+        raise ValueError("saved run has an invalid reasoning effort")
+    if "reasoning_effort" in model and "reasoning_effort" in config and effort != config["reasoning_effort"]:
+        raise ValueError("saved model and config reasoning effort mismatch; refusing resume")
     expected_payload = {
         "model_id": model_id,
         "reasoning_effort": effort,
@@ -399,7 +424,7 @@ def _config_from_manifest(manifest: Mapping[str, Any]) -> RunConfig:
     config = manifest["config"]
     model = manifest.get("model", {})
     model_id = str(config.get("model_id") or model.get("model_id") or config.get("requested_model") or "")
-    effort = config.get("reasoning_effort") or model.get("reasoning_effort")
+    effort = config.get("reasoning_effort", model.get("reasoning_effort"))
     return RunConfig(
         model_id=model_id,
         reasoning_effort=effort,
@@ -409,7 +434,11 @@ def _config_from_manifest(manifest: Mapping[str, Any]) -> RunConfig:
         max_attempts=int(config["max_attempts"]),
         retry_delay_seconds=float(config["retry_delay_seconds"]),
         timeout_seconds=float(config["timeout_seconds"]),
-        max_completion_tokens=int(config["max_completion_tokens"]),
+        max_completion_tokens=(
+            int(config["max_completion_tokens"])
+            if config.get("max_completion_tokens") is not None
+            else None
+        ),
         min_request_interval_seconds=float(
             config.get("min_request_interval_seconds", DEFAULT_MIN_REQUEST_INTERVAL_SECONDS)
         ),
@@ -428,7 +457,7 @@ def _validate_resume_overrides(
         "model_id": (overrides.get("model_id"), saved_model_id),
         "reasoning_effort": (
             overrides.get("reasoning_effort"),
-            config.get("reasoning_effort"),
+            config.get("reasoning_effort", model.get("reasoning_effort")),
         ),
         "depths": (
             tuple(overrides["depths"]) if overrides.get("depths") is not None else None,
@@ -449,7 +478,8 @@ def _validate_resume_overrides(
         ),
     }
     for name, (provided, recorded) in checks.items():
-        if provided is not None and provided != recorded:
+        is_provided = name in overrides if name == "reasoning_effort" else provided is not None
+        if is_provided and provided != recorded:
             raise ValueError(
                 f"resume {name} mismatch: saved run has {recorded!r}, "
                 f"requested {provided!r}"
@@ -458,12 +488,14 @@ def _validate_resume_overrides(
         raise ValueError("saved model and pricing snapshot do not match; refusing resume")
 
 
-def _new_ledger_path(results_dir: Path, model_id: str, reasoning_effort: str) -> Path:
+def _new_ledger_path(results_dir: Path, model_id: str, reasoning_effort: str | None) -> Path:
     root = results_dir.resolve()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     model_slug = _safe_slug(model_id)
-    effort_slug = _safe_slug(reasoning_effort)[:48] or "effort"
-    effort_hash = hashlib.sha256(reasoning_effort.encode("utf-8")).hexdigest()[:10]
+    effort_slug = _safe_slug(reasoning_effort)[:48] if reasoning_effort is not None else "omitted"
+    effort_hash = hashlib.sha256(
+        reasoning_effort.encode("utf-8") if reasoning_effort is not None else b"null"
+    ).hexdigest()[:10]
     path = root / f"{model_slug}__effort-{effort_slug}-{effort_hash}_{stamp}_{uuid4().hex[:8]}.jsonl"
     if path.parent != root:
         raise ValueError("generated run ledger path escaped the results directory")
@@ -1467,10 +1499,14 @@ def create_dry_run_plan(
         "completion_rate_usd_per_million": decimal_text(
             model_info.completion_rate_usd_per_million
         ),
-        "max_output_cost_bound_usd": decimal_text(
-            Decimal(config.max_completion_tokens * len(cases) * config.max_attempts)
-            * model_info.completion_rate_usd_per_million
-            / Decimal(1_000_000)
+        "max_output_cost_bound_usd": (
+            decimal_text(
+                Decimal(config.max_completion_tokens * len(cases) * config.max_attempts)
+                * model_info.completion_rate_usd_per_million
+                / Decimal(1_000_000)
+            )
+            if config.max_completion_tokens is not None
+            else None
         ),
         "pricing_source": model_info.pricing_source,
         "pricing_retrieved_at": model_info.pricing_retrieved_at,
@@ -1479,6 +1515,9 @@ def create_dry_run_plan(
         "max_total_inference_attempts": len(cases) * config.max_attempts,
         "min_request_interval_seconds": config.min_request_interval_seconds,
         "default_429_cooldown_seconds": DEFAULT_429_COOLDOWN_SECONDS,
+        "retry_delay_seconds": config.retry_delay_seconds,
+        "retry_jitter_fraction": DEFAULT_RETRY_JITTER_FRACTION,
+        "timeout_seconds": config.timeout_seconds,
         "max_completion_tokens": config.max_completion_tokens,
         "inference_requests": len(cases),
     }

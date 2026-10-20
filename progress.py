@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Any, TextIO
 
-ProgressKey = tuple[str, str]  # (fully qualified model ID, explicit effort)
+ProgressKey = tuple[str, str | None]  # (fully qualified model ID, optional effort)
 
 
 def _duration(seconds: float) -> str:
@@ -109,7 +109,7 @@ class ProgressReporter:
     def register_model(
         self,
         model_id: str,
-        reasoning_effort: str,
+        reasoning_effort: str | None,
         total: int,
         *,
         initial_completed: int = 0,
@@ -160,7 +160,7 @@ class ProgressReporter:
                     self._render_locked(status)
 
     def model_finished(
-        self, model_id: str, reasoning_effort: str, *, success: bool
+        self, model_id: str, reasoning_effort: str | None, *, success: bool
     ) -> None:
         key = (model_id, reasoning_effort)
         with self._lock:
@@ -178,7 +178,7 @@ class ProgressReporter:
 
     def __call__(self, event: dict[str, Any]) -> None:
         model_id = str(event.get("model_id", "model"))
-        effort = str(event.get("reasoning_effort", ""))
+        effort = event.get("reasoning_effort")
         key = (model_id, effort)
         with self._lock:
             state = self._models.get(key)
@@ -273,7 +273,7 @@ class ProgressReporter:
 
         # Preserve the useful counters and rate at narrow widths by shortening
         # labels/bar first, rather than slicing off ETA or tokens/second.
-        effort_label = _terminal_text(effort, 12)
+        effort_label = _terminal_text(effort if effort is not None else "default", 12)
         bar_width = min(12, max(4, width // 10))
         suffix = f" | [{('█' * min(bar_width, int(ratio * bar_width))) + ('░' * (bar_width - min(bar_width, int(ratio * bar_width))))}] {state.completed}/{state.total} ({ratio:.0%})"
         middle = f" | Effort: {effort_label}"

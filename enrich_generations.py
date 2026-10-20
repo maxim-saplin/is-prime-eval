@@ -122,13 +122,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Fetch delayed OpenRouter generation details without repeating model inference."
     )
     parser.add_argument("ledger", help="JSONL event ledger to enrich")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        required=True,
+        help="Explicit urllib socket inactivity timeout for metadata lookup, in seconds",
+    )
     args = parser.parse_args(argv)
     load_dotenv()
     api_key = get_openrouter_key()
     if not api_key:
         parser.error("OpenRouter key missing; set OR_KEY in .env or the environment")
     try:
-        result = enrich_ledger(args.ledger, OpenRouterClient(api_key))
+        result = enrich_ledger(
+            args.ledger,
+            OpenRouterClient(api_key, timeout=args.timeout),
+        )
     except (OSError, ValueError, OpenRouterError) as exc:
         parser.error(str(exc))
     print(

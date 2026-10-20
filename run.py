@@ -18,12 +18,10 @@ from progress import ProgressReporter
 from runner import (
     DEFAULT_DEPTHS,
     DEFAULT_MAX_RETRIES,
-    DEFAULT_MAX_COMPLETION_TOKENS,
     DEFAULT_MIN_REQUEST_INTERVAL_SECONDS,
     DEFAULT_RETRY_DELAY_SECONDS,
     DEFAULT_SAMPLES_PER_CLASS,
     DEFAULT_SEED,
-    DEFAULT_TIMEOUT_SECONDS,
     EvaluationInterrupted,
     RunConfig,
     create_dry_run_plan,
@@ -71,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reasoning-effort",
         action="append",
-        help="Explicit provider effort paired by order with each --model-id; repeat for parallel runs",
+        help="Explicit provider effort paired per --model-id; use 'omit' to send no reasoning controls (repeat for parallel runs)",
     )
     parser.add_argument(
         "--parallelism",
@@ -97,11 +95,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         help="Shared maximum completion dispatch rate across model workers (default: 15)",
     )
-    parser.add_argument("--timeout", type=float, help="OpenRouter request timeout in seconds (default: 90)")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        help="Explicit urllib socket inactivity timeout in seconds (required for new runs; resume uses saved policy)",
+    )
     parser.add_argument(
         "--max-completion-tokens",
         type=int,
-        help="Maximum response tokens per request (default: 512)",
+        help="Explicit completion-token cap per request; unset sends no token cap",
     )
     parser.add_argument("--results-dir", default=str(PROJECT_ROOT / "results"))
     parser.add_argument("--output", help="Explicit JSONL ledger path (single run only)")
@@ -136,12 +138,8 @@ def _settings(args: argparse.Namespace) -> dict:
             if args.retry_delay is not None
             else DEFAULT_RETRY_DELAY_SECONDS
         ),
-        "timeout_seconds": args.timeout if args.timeout is not None else DEFAULT_TIMEOUT_SECONDS,
-        "max_completion_tokens": (
-            args.max_completion_tokens
-            if args.max_completion_tokens is not None
-            else DEFAULT_MAX_COMPLETION_TOKENS
-        ),
+        "timeout_seconds": args.timeout,
+        "max_completion_tokens": args.max_completion_tokens,
     }
 
 
@@ -161,10 +159,21 @@ def _config_for(spec: ModelSpec, values: dict) -> RunConfig:
 
 
 def _dry_run_text(plan: dict) -> str:
+    output_cap = plan["max_output_cost_bound_usd"]
+    cap_line = (
+        f"Output-only cap estimate at explicit token/attempt limits (input excluded): ${output_cap}"
+        if output_cap is not None
+        else "Output-only cap estimate: unbounded (no completion-token cap is set; input excluded)"
+    )
+    token_limit_line = (
+        f"Completion token cap: {plan['max_completion_tokens']}"
+        if plan["max_completion_tokens"] is not None
+        else "Completion token cap: none (no max_completion_tokens or max_tokens parameter sent)"
+    )
     rows = [
         "DRY RUN — no chat-completion inference will be sent",
         f"Model ID: {plan['model_id']}",
-        f"Reasoning effort: {plan['reasoning_effort']}",
+        f"Reasoning effort: {plan['reasoning_effort'] if plan['reasoning_effort'] is not None else 'omitted (provider default)'}",
         f"Resolved model name: {plan['resolved_model_name']}",
         f"Digit depths: {', '.join(map(str, plan['depths']))}",
         f"Cases per depth: {plan['samples_per_class']} prime + {plan['samples_per_class']} non-prime",
@@ -174,12 +183,15 @@ def _dry_run_text(plan: dict) -> str:
         f"Dataset SHA-256: {plan['dataset_sha256']}",
         f"Uncached input price: ${plan['prompt_rate_usd_per_million']} / 1M tokens",
         f"Output price: ${plan['completion_rate_usd_per_million']} / 1M tokens",
-        f"Output-only cap estimate at token/attempt limits (input excluded): ${plan['max_output_cost_bound_usd']}",
+        cap_line,
         f"Maximum retries per case: {plan['max_retries']} ({plan['max_attempts']} total attempts)",
+        f"Retry backoff: {plan['retry_delay_seconds']:.2f}s exponential base with "
+        f"bounded ±{plan['retry_jitter_fraction']:.0%} jitter",
+        f"Request timeout: {plan['timeout_seconds']:.1f}s",
         f"Shared maximum request rate: {60.0 / plan['min_request_interval_seconds']:.2f} per minute "
         f"({plan['min_request_interval_seconds']:.2f}s minimum spacing)",
         f"429 cooldown: max(Retry-After, {plan['default_429_cooldown_seconds']:.0f}s safety floor)",
-        f"Maximum completion tokens per request: {plan['max_completion_tokens']}",
+        token_limit_line,
         f"Pricing source: {plan['pricing_source']} ({plan['pricing_retrieved_at']})",
         "Requests by depth: " + ", ".join(
             f"{depth}d={count}" for depth, count in plan["cases_by_depth"].items()
@@ -188,10 +200,10 @@ def _dry_run_text(plan: dict) -> str:
     return "\n".join(rows)
 
 
-def _print_run_result(model_id: str, effort: str, result: dict) -> None:
+def _print_run_result(model_id: str, effort: str | None, result: dict) -> None:
     print(f"Run {'complete' if result['complete'] else 'incomplete'}")
     print(f"Model ID: {model_id}")
-    print(f"Reasoning effort: {effort}")
+    print(f"Reasoning effort: {effort if effort is not None else 'omitted (provider default)'}")
     print(f"Ledger: {result['ledger_path']}")
     print(f"Manifest: {result['manifest_path']}")
     counts = result["summary"]
@@ -206,6 +218,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.parallelism <= 0:
         parser.error("--parallelism must be positive")
+    if not args.resume and args.timeout is None:
+        parser.error("new runs require an explicit urllib socket timeout via --timeout")
+    if args.timeout is not None and (
+        not math.isfinite(args.timeout) or args.timeout <= 0
+    ):
+        parser.error("--timeout must be finite and positive")
     if args.max_retries is not None and args.max_retries < 0:
         parser.error("--max-retries cannot be negative")
     if (
@@ -245,13 +263,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         saved_config = saved.get("config", {})
         saved_model = saved.get("model", {})
         model_id = str(saved_model.get("model_id") or saved_config.get("model_id") or saved_config.get("requested_model") or "")
-        effort = str(saved_model.get("reasoning_effort") or saved_config.get("reasoning_effort") or "")
-        if not model_id or not effort:
-            parser.error("saved run manifest does not contain an explicit model ID and effort")
-        client = OpenRouterClient(
-            api_key,
-            timeout=float(saved_config.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS)),
-        )
+        effort = saved_model.get("reasoning_effort", saved_config.get("reasoning_effort"))
+        if not model_id:
+            parser.error("saved run manifest does not contain an explicit model ID")
+        saved_timeout = saved_config.get("timeout_seconds")
+        if (
+            not isinstance(saved_timeout, (int, float))
+            or isinstance(saved_timeout, bool)
+            or not math.isfinite(saved_timeout)
+            or saved_timeout <= 0
+        ):
+            parser.error("saved run manifest does not contain an explicit finite timeout")
+        client = OpenRouterClient(api_key, timeout=float(saved_timeout))
         reporter = ProgressReporter(stream=sys.stderr)
         try:
             reporter.set_batch_total(1)

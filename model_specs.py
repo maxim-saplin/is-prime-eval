@@ -8,10 +8,10 @@ from typing import Sequence
 
 @dataclass(frozen=True)
 class ModelSpec:
-    """One OpenRouter model ID and its explicitly provided reasoning effort."""
+    """One OpenRouter model ID and an optional provider reasoning effort."""
 
     model_id: str
-    reasoning_effort: str
+    reasoning_effort: str | None
 
 
 def parse_model_specs(
@@ -20,9 +20,9 @@ def parse_model_specs(
 ) -> list[ModelSpec]:
     """Pair repeated CLI values by order; never infer effort from the model ID.
 
-    Every `--model-id` must have one corresponding `--reasoning-effort`.
-    Effort values are passed through as supplied, allowing the selected provider
-    and model to determine which non-empty levels they accept.
+    Provide exactly one explicit effort per model. The CLI sentinel ``omit``
+    maps to None so reasoning controls are not sent; all other values (including
+    provider level ``none``) are passed through unchanged.
     """
     if isinstance(model_ids, str) or isinstance(reasoning_efforts, str):
         raise TypeError("model IDs and efforts must be supplied as repeated CLI values")
@@ -36,7 +36,7 @@ def parse_model_specs(
         )
 
     specs: list[ModelSpec] = []
-    identities: set[tuple[str, str]] = set()
+    identities: set[tuple[str, str | None]] = set()
     for index, (model_id, effort) in enumerate(zip(ids, efforts)):
         if not isinstance(model_id, str) or not model_id:
             raise ValueError(f"model_id at position {index + 1} must be non-empty")
@@ -50,7 +50,9 @@ def parse_model_specs(
             raise ValueError(
                 f"reasoning_effort at position {index + 1} must be explicit and non-empty"
             )
-        if any(character.isspace() for character in effort):
+        if effort == "omit":
+            effort = None
+        elif any(character.isspace() for character in effort):
             raise ValueError(
                 f"reasoning_effort at position {index + 1} must not contain whitespace"
             )

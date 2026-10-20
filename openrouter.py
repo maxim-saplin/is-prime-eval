@@ -86,15 +86,22 @@ class OpenRouterClient:
         self,
         api_key: str,
         *,
+        timeout: float,
         base_url: str = DEFAULT_BASE_URL,
-        timeout: float = 90.0,
         opener: Callable[..., Any] | None = None,
     ) -> None:
         if not isinstance(api_key, str) or not api_key.strip():
             raise ValueError("an OpenRouter API key is required")
         self._api_key = api_key.strip()
+        if (
+            not isinstance(timeout, (int, float))
+            or isinstance(timeout, bool)
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            raise ValueError("an explicit finite positive HTTP timeout is required")
         self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
+        self.timeout = float(timeout)
         self._opener = opener
         self._models_cache: list[dict[str, Any]] | None = None
 
@@ -229,6 +236,8 @@ class OpenRouterClient:
 
     @staticmethod
     def validate_reasoning_effort(model: ModelInfo, effort: str | None) -> None:
+        if effort is None:
+            return
         if not isinstance(effort, str) or not effort or effort != effort.strip() or any(ch.isspace() for ch in effort):
             raise ValueError("reasoning effort must be explicitly specified as a non-empty value")
         supported = set(model.supported_parameters)
@@ -242,18 +251,26 @@ class OpenRouterClient:
         model_id: str,
         prompt: str,
         *,
-        reasoning_effort: str,
-        max_completion_tokens: int = 512,
+        reasoning_effort: str | None,
+        max_completion_tokens: int | None = None,
     ) -> dict[str, Any]:
-        if not isinstance(reasoning_effort, str) or not reasoning_effort or reasoning_effort != reasoning_effort.strip() or any(ch.isspace() for ch in reasoning_effort):
+        if reasoning_effort is not None and (not isinstance(reasoning_effort, str) or not reasoning_effort or reasoning_effort != reasoning_effort.strip() or any(ch.isspace() for ch in reasoning_effort)):
             raise ValueError("reasoning_effort must be explicitly specified as a non-empty value")
+        if max_completion_tokens is not None and (
+            not isinstance(max_completion_tokens, int)
+            or isinstance(max_completion_tokens, bool)
+            or max_completion_tokens <= 0
+        ):
+            raise ValueError("max_completion_tokens must be a positive integer when explicitly set")
         payload: dict[str, Any] = {
             "model": model_id,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "max_completion_tokens": max_completion_tokens,
-            "reasoning_effort": reasoning_effort,
         }
+        if max_completion_tokens is not None:
+            payload["max_completion_tokens"] = max_completion_tokens
+        if reasoning_effort is not None:
+            payload["reasoning_effort"] = reasoning_effort
         response = self._request_json("POST", "/chat/completions", payload)
         error = response.get("error")
         choices = response.get("choices")

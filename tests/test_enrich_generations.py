@@ -78,7 +78,8 @@ class GenerationEnrichmentTests(unittest.TestCase):
                 max_attempts=1,
                 retry_delay_seconds=0,
                 timeout_seconds=2,
-                max_completion_tokens=512,
+                max_completion_tokens=None,
+                min_request_interval_seconds=0.0,
             )
             inference = DirectCompletionClient()
             result = run_new(

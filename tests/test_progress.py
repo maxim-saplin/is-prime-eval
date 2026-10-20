@@ -39,6 +39,63 @@ class ProgressReporterTests(unittest.TestCase):
         self.assertIn("tok/s", text)
         self.assertIn("Correct 1", text)
 
+    def test_omitted_effort_events_reuse_registered_identity_and_display_omitted(self):
+        for explicit_null in (False, True):
+            with self.subTest(explicit_null=explicit_null):
+                output = io.StringIO()
+                reporter = ProgressReporter(stream=output)
+                reporter.set_batch_total(1)
+                reporter.register_model("provider/model", None, 2)
+                event = {
+                    "event": "run_progress_init",
+                    "model_id": "provider/model",
+                    "total_cases": 2,
+                    "completed_cases": 1,
+                    "correct": 1,
+                }
+                if explicit_null:
+                    event["reasoning_effort"] = None
+                reporter(event)
+                reporter({
+                    **event,
+                    "event": "case_finished",
+                    "case_id": "remaining-case",
+                    "outcome": "correct",
+                    "completion_tokens": 12,
+                })
+                reporter.model_finished("provider/model", None, success=True)
+                self.assertEqual(set(reporter._models), {("provider/model", None)})
+                state = reporter._models[("provider/model", None)]
+                self.assertEqual(state.completed, 2)
+                self.assertEqual(state.correct, 2)
+                self.assertEqual(state.output_tokens, 12)
+                self.assertIn("Effort: default", output.getvalue())
+                self.assertIn("1/1 done", output.getvalue())
+                reporter.close()
+
+    def test_mixed_efforts_keep_omission_distinct_from_literal_none(self):
+        output = io.StringIO()
+        reporter = ProgressReporter(stream=output)
+        reporter.set_batch_total(3)
+        for effort in (None, "none", "high"):
+            reporter.register_model("provider/model", effort, 1)
+            reporter({
+                "event": "case_finished",
+                "model_id": "provider/model",
+                "reasoning_effort": effort,
+                "case_id": "same-case",
+                "outcome": "correct",
+                "completion_tokens": 1,
+            })
+            reporter.model_finished("provider/model", effort, success=True)
+        self.assertEqual(len(reporter._models), 3)
+        self.assertTrue(all(state.completed == 1 for state in reporter._models.values()))
+        self.assertIn("Effort: default", output.getvalue())
+        self.assertIn("Effort: none", output.getvalue())
+        self.assertIn("Effort: high", output.getvalue())
+        self.assertIn("3/3 done", output.getvalue())
+        reporter.close()
+
     def test_failure_usage_is_included_in_output_token_rate(self):
         output = io.StringIO()
         reporter = ProgressReporter(stream=output)

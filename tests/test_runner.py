@@ -173,6 +173,7 @@ class RunnerTests(unittest.TestCase):
             retry_delay_seconds=0,
             timeout_seconds=2,
             max_completion_tokens=32,
+            min_request_interval_seconds=0.0,
         )
 
     def tearDown(self):
@@ -199,6 +200,7 @@ class RunnerTests(unittest.TestCase):
             retry_delay_seconds=0,
             timeout_seconds=2,
             max_completion_tokens=32,
+            min_request_interval_seconds=0.0,
         )
         client = FakeClient()
         result = run_new(
@@ -258,12 +260,32 @@ class RunnerTests(unittest.TestCase):
         self.assertTrue(resumed["complete"])
         self.assertTrue(resumed["already_finished"])
         self.assertEqual(len(client.calls), 2)
+        self.assertTrue(all(call["max_completion_tokens"] == 32 for call in client.calls))
         with self.assertRaisesRegex(ValueError, "reasoning_effort mismatch"):
             resume_run(
                 client=client,
                 ledger_path=result["ledger_path"],
                 overrides={"reasoning_effort": "medium"},
             )
+        with self.assertRaisesRegex(ValueError, "reasoning_effort mismatch"):
+            resume_run(
+                client=client, ledger_path=result["ledger_path"],
+                overrides={"reasoning_effort": None},
+            )
+
+    def test_resume_rejects_manifest_with_missing_cap_policy(self):
+        result = run_new(
+            client=FakeClient(),
+            config=self.config,
+            model_info=self.model_info,
+            results_dir=self.results_dir,
+        )
+        manifest_path = Path(result["manifest_path"])
+        manifest = json.loads(manifest_path.read_text())
+        del manifest["config"]["max_completion_tokens"]
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "does not record its completion-token-cap policy"):
+            resume_run(client=FakeClient(), ledger_path=result["ledger_path"])
 
     def test_default_retry_budget_is_five_retries_six_total_attempts(self):
         from runner import DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_RETRIES
@@ -470,7 +492,7 @@ class RunnerTests(unittest.TestCase):
     def test_arbitrary_effort_cannot_escape_results_dir_or_collide_after_slugging(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "results"
-            efforts = ("custom/../../outside", "custom/level", "custom-level")
+            efforts = ("custom/../../outside", "custom/level", "custom-level", None, "none", "omitted")
             paths = [_new_ledger_path(root, "openai/gpt-6-luna", effort) for effort in efforts]
             self.assertTrue(all(path.parent == root.resolve() for path in paths))
             self.assertEqual(len({path.name for path in paths}), len(paths))
@@ -500,6 +522,31 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["not_attempted"], 2)
         events = [json.loads(line) for line in Path(result["ledger_path"]).read_text().splitlines()]
         self.assertTrue(any(event["event_type"] == "attempt_cancelled_before_dispatch" for event in events))
+
+    def test_omitted_effort_survives_interruption_resume_and_rejects_tampering(self):
+        from dataclasses import replace
+
+        config = replace(self.config, reasoning_effort=None)
+        model = replace(self.model_info, supported_parameters=("temperature",))
+        with self.assertRaises(KeyboardInterrupt):
+            run_new(
+                client=InterruptOnceClient(), config=config, model_info=model,
+                results_dir=self.results_dir,
+            )
+        ledger = next(self.results_dir.glob("*.jsonl"))
+        client = FakeClient()
+        result = resume_run(client=client, ledger_path=ledger)
+        self.assertTrue(result["complete"])
+        self.assertTrue(all(call["reasoning_effort"] is None for call in client.calls))
+        with self.assertRaisesRegex(ValueError, "reasoning_effort mismatch"):
+            resume_run(client=client, ledger_path=ledger, overrides={"reasoning_effort": "high"})
+        manifest_path = Path(result["manifest_path"])
+        manifest = json.loads(manifest_path.read_text())
+        manifest["model"]["reasoning_effort"] = "high"
+        manifest["config"]["reasoning_effort"] = "high"
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "configuration hash mismatch"):
+            resume_run(client=client, ledger_path=ledger)
 
     def test_interrupt_then_resume_preserves_unknown_spend_and_attempt_identity(self):
         client = InterruptOnceClient()

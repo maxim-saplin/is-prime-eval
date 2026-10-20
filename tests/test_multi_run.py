@@ -113,6 +113,7 @@ class MultiRunTests(unittest.TestCase):
             retry_delay_seconds=0,
             timeout_seconds=2,
             max_completion_tokens=64,
+            min_request_interval_seconds=0.0,
         )
         return ModelRunSpec(config=config, model_info=model)
 

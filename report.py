@@ -250,7 +250,7 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
         "manifest_path": str(manifest_path),
         "run_id": manifest.get("run_id"),
         "model_id": model.get("model_id") or model.get("requested_id") or manifest.get("display_model", "unknown"),
-        "reasoning_effort": model.get("reasoning_effort"),
+        "reasoning_effort": model.get("reasoning_effort", "unknown"),
         "dataset_id": dataset.get("dataset_id"),
         "prompt_version": manifest.get("prompt", {}).get("version"),
         "depths": list(dataset.get("depths", [])),
@@ -296,6 +296,11 @@ def _markdown_cell(value: Any) -> str:
     return text.replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
 
 
+def _effort_label(summary: Mapping[str, Any]) -> str:
+    effort = summary.get("reasoning_effort", "unknown")
+    return _markdown_cell("omitted (provider default)" if effort is None else effort or "unknown")
+
+
 def _route_label(summary: Mapping[str, Any]) -> str:
     routes = summary.get("provider_routes", [])
     return _markdown_cell(", ".join(routes) if routes else "unknown")
@@ -333,13 +338,18 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
     lines = ["# Prime-eval leaderboard", ""]
     for group_key, group in sorted(groups.items(), key=lambda item: str(item[0])):
         dataset_id, prompt_version, depths, samples_per_class, max_tokens, max_attempts, retry_delay, timeout = group_key
+        max_tokens_label = (
+            "no explicit token cap"
+            if max_tokens is None
+            else str(max_tokens)
+        )
         lines.extend(
             [
                 f"## Dataset `{dataset_id}`",
                 "",
                 f"Prompt: `{prompt_version}` · Digits: {', '.join(map(str, depths))} · "
                 f"Samples: {samples_per_class} prime + {samples_per_class} non-prime per digit · "
-                f"Max attempts: {max_attempts} · Max completion tokens: {max_tokens} · "
+                f"Max attempts: {max_attempts} · Completion token cap: {max_tokens_label} · "
                 f"Timeout: {timeout}s · Retry delay: {retry_delay}s · Effort shown per model",
                 "",
             ]
@@ -367,7 +377,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                 counts = run["counts"]
                 total = run["scheduled"]
                 lines.append(
-                    f"| {rank} | {_markdown_cell(run['model_id'])} | {_markdown_cell(run.get('reasoning_effort') or 'unknown')} | "
+                    f"| {rank} | {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
                     f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | "
                     f"{counts['answered_cases']}/{total} | "
                     f"{_percentage(counts['correct'], total)} | "
@@ -381,7 +391,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                     scheduled = cell["scheduled"]
                     incorrect = cell["incorrect"]
                     lines.append(
-                        f"| {_markdown_cell(run['model_id'])} | {_markdown_cell(run.get('reasoning_effort') or 'unknown')} | "
+                        f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
                         f"{str(run.get('run_id') or '')[:8]} | {depth} | "
                         f"{_percentage(cell['correct'], scheduled)} | "
                         f"{_percentage(incorrect, scheduled)} | "
@@ -400,7 +410,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
             )
             for run in complete_runs:
                 lines.append(
-                    f"| {_markdown_cell(run['model_id'])} | {_markdown_cell(run.get('reasoning_effort') or 'unknown')} | "
+                    f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
                     f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | "
                     f"{run['prompt_tokens']:,} / {run['completion_tokens']:,} "
                     f"({run['token_usage_known_attempts']}/{run['attempt_count']} attempts with token counts) | "
@@ -419,7 +429,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
             for run in incomplete_runs:
                 counts = run["counts"]
                 lines.append(
-                    f"| {_markdown_cell(run['model_id'])} | {_markdown_cell(run.get('reasoning_effort') or 'unknown')} | "
+                    f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
                     f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | {run['scheduled']} | "
                     f"{_percentage(counts['correct'], run['scheduled'])} | "
                     f"{_percentage(counts['incorrect'], run['scheduled'])} | "

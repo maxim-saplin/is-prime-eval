@@ -35,7 +35,7 @@ class FakeCatalogClient(OpenRouterClient):
             supported_parameters=("reasoning_effort",),
         )
 
-    def complete(self, model_id, prompt, *, reasoning_effort, max_completion_tokens=512):
+    def complete(self, model_id, prompt, *, reasoning_effort, max_completion_tokens=None):
         if self.fail_if_called:
             raise AssertionError("completed-run resume must not dispatch inference")
         type(self).completion_calls += 1
@@ -54,6 +54,17 @@ class FakeCatalogClient(OpenRouterClient):
 
 
 class RunCliTests(unittest.TestCase):
+    def test_new_cli_run_requires_an_explicit_timeout_policy(self):
+        with redirect_stderr(io.StringIO()) as errors:
+            with self.assertRaises(SystemExit) as caught:
+                main([
+                    "--model-id", "openai/gpt-6-luna",
+                    "--reasoning-effort", "low",
+                    "--dry-run",
+                ])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("explicit urllib socket timeout via --timeout", errors.getvalue())
+
     def test_single_run_requires_explicit_separate_model_id_and_effort(self):
         args = build_parser().parse_args(
             ["--model-id", "openai/gpt-6-luna", "--reasoning-effort", "high"]
@@ -65,6 +76,8 @@ class RunCliTests(unittest.TestCase):
         args = build_parser().parse_args([])
         settings = _settings(args)
         self.assertEqual(settings["max_attempts"], 6)
+        self.assertEqual(settings["max_completion_tokens"], None)
+        self.assertIsNone(settings["timeout_seconds"])
         self.assertEqual(settings["min_request_interval_seconds"], 4.0)
         explicit = build_parser().parse_args(
             ["--max-retries", "5", "--requests-per-minute", "15"]
@@ -72,6 +85,8 @@ class RunCliTests(unittest.TestCase):
         explicit_settings = _settings(explicit)
         self.assertEqual(explicit_settings["max_attempts"], 6)
         self.assertEqual(explicit_settings["min_request_interval_seconds"], 4.0)
+        capped = build_parser().parse_args(["--max-completion-tokens", "128"])
+        self.assertEqual(_settings(capped)["max_completion_tokens"], 128)
 
     def test_old_alias_and_qualifier_syntax_is_rejected(self):
         for argv in (
@@ -85,7 +100,7 @@ class RunCliTests(unittest.TestCase):
                     build_parser().parse_args(argv)
             self.assertEqual(caught.exception.code, 2)
 
-    def test_missing_effort_fails_before_catalog_or_inference(self):
+    def test_missing_effort_fails_but_omit_sentinel_allows_non_reasoning_model(self):
         FakeCatalogClient.resolved_ids = []
         with (
             patch("run.OpenRouterClient", FakeCatalogClient),
@@ -94,9 +109,49 @@ class RunCliTests(unittest.TestCase):
             redirect_stderr(io.StringIO()),
         ):
             with self.assertRaises(SystemExit) as caught:
-                main(["--model-id", "openai/gpt-6-luna"])
+                main(["--model-id", "openai/gpt-4-turbo", "--timeout", "2", "--dry-run"])
         self.assertEqual(caught.exception.code, 2)
         self.assertEqual(FakeCatalogClient.resolved_ids, [])
+
+        output = io.StringIO()
+        with (
+            patch("run.OpenRouterClient", FakeCatalogClient),
+            patch("run.load_dotenv"),
+            patch("run.get_openrouter_key", return_value="test-key"),
+            redirect_stdout(output),
+        ):
+            result = main([
+                "--model-id", "openai/gpt-4-turbo",
+                "--reasoning-effort", "omit", "--timeout", "2", "--dry-run",
+            ])
+        self.assertEqual(result, 0)
+        self.assertEqual(FakeCatalogClient.resolved_ids, ["openai/gpt-4-turbo"])
+        self.assertIn("Reasoning effort: omitted (provider default)", output.getvalue())
+
+    def test_no_effort_run_and_cli_resume_preserve_null(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "non-reasoning.jsonl"
+            with (
+                patch("run.OpenRouterClient", FakeCatalogClient),
+                patch("run.load_dotenv"),
+                patch("run.get_openrouter_key", return_value="test-key"),
+                redirect_stdout(io.StringIO()),
+                redirect_stderr(io.StringIO()),
+            ):
+                self.assertEqual(main([
+                    "--model-id", "openai/gpt-4-turbo", "--reasoning-effort", "omit",
+                    "--depths", "4",
+                    "--samples-per-class", "1", "--requests-per-minute", "1000000",
+                    "--timeout", "2",
+                    "--results-dir", str(Path(directory) / "results"),
+                    "--output", str(output),
+                ]), 0)
+                calls = FakeCatalogClient.completion_calls
+                self.assertEqual(main(["--resume", str(output)]), 0)
+                self.assertEqual(FakeCatalogClient.completion_calls, calls)
+            manifest = json.loads(output.with_suffix(".manifest.json").read_text())
+            self.assertIsNone(manifest["model"]["reasoning_effort"])
+            self.assertIsNone(manifest["config"]["reasoning_effort"])
 
     def test_parallel_cli_pairs_repeated_model_ids_and_efforts_by_order(self):
         FakeCatalogClient.completion_calls = 0
@@ -112,7 +167,7 @@ class RunCliTests(unittest.TestCase):
                 [
                     "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low",
                     "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "high",
-                    "--parallelism", "2", "--dry-run",
+                    "--parallelism", "2", "--timeout", "2", "--dry-run",
                 ]
             )
         text = output.getvalue()
@@ -125,6 +180,8 @@ class RunCliTests(unittest.TestCase):
         self.assertIn("Maximum retries per case: 5 (6 total attempts)", text)
         self.assertIn("Maximum completion attempts including retries: 840", text)
         self.assertIn("Shared maximum request rate: 15.00 per minute (4.00s minimum spacing)", text)
+        self.assertIn("Completion token cap: none (no max_completion_tokens or max_tokens parameter sent)", text)
+        self.assertIn("Output-only cap estimate: unbounded", text)
         hashes = [line.split(": ", 1)[1] for line in text.splitlines() if line.startswith("Dataset SHA-256:")]
         self.assertEqual(len(hashes), 2)
         self.assertEqual(hashes[0], hashes[1])
@@ -132,7 +189,7 @@ class RunCliTests(unittest.TestCase):
     def test_effort_list_must_pair_with_model_ids_and_duplicates_fail(self):
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
-                main(["--model-id", "openai/gpt-6-luna", "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low"])
+                main(["--model-id", "openai/gpt-6-luna", "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low", "--timeout", "2"])
         # Same identity repeated in one batch is rejected before catalog requests.
         FakeCatalogClient.resolved_ids = []
         with (
@@ -146,6 +203,7 @@ class RunCliTests(unittest.TestCase):
                     [
                         "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low",
                         "--model-id", "openai/gpt-6-luna", "--reasoning-effort", "low",
+                        "--timeout", "2",
                     ]
                 )
         self.assertEqual(FakeCatalogClient.resolved_ids, [])
@@ -171,6 +229,7 @@ class RunCliTests(unittest.TestCase):
             retry_delay_seconds=0,
             timeout_seconds=2,
             max_completion_tokens=64,
+            min_request_interval_seconds=0.0,
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             original = run_new(
@@ -218,6 +277,7 @@ class RunCliTests(unittest.TestCase):
             retry_delay_seconds=0,
             timeout_seconds=2,
             max_completion_tokens=64,
+            min_request_interval_seconds=0.0,
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaises(KeyboardInterrupt) as caught:

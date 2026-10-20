@@ -49,7 +49,7 @@ class OpenRouterClientTests(unittest.TestCase):
                 }
             )
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         model = client.resolve_model("gpt-6-luna")
         self.assertEqual(model.model_id, "openai/gpt-6-luna")
         self.assertEqual(model.requested_id, "gpt-6-luna")
@@ -69,7 +69,7 @@ class OpenRouterClientTests(unittest.TestCase):
                 }
             )
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         with self.assertRaisesRegex(ValueError, "ambiguous"):
             client.resolve_model("model")
 
@@ -83,7 +83,7 @@ class OpenRouterClientTests(unittest.TestCase):
                 {"id": "gen-1", "model": "openai/gpt-6-luna", "choices": [{"message": {"content": "PRIME"}}]}
             )
 
-        client = OpenRouterClient("do-not-log-this", opener=opener)
+        client = OpenRouterClient("do-not-log-this", timeout=2.0, opener=opener)
         result = client.complete(
             "openai/gpt-6-luna",
             "Is 101 prime? Reply with only PRIME or COMPOSITE.",
@@ -92,9 +92,43 @@ class OpenRouterClientTests(unittest.TestCase):
         )
         self.assertEqual(captured["body"]["reasoning_effort"], "low")
         self.assertEqual(captured["body"]["max_completion_tokens"], 128)
+        self.assertNotIn("max_tokens", captured["body"])
         self.assertEqual(captured["body"]["messages"][0]["role"], "user")
         self.assertEqual(result["choices"][0]["message"]["content"], "PRIME")
         self.assertNotIn("do-not-log-this", repr(result))
+
+    def test_completion_without_effort_omits_reasoning_controls(self):
+        captured = []
+
+        def opener(request, timeout):
+            captured.append(json.loads(request.data))
+            return FakeHTTPResponse({"choices": [{"message": {"content": "PRIME"}}]})
+
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
+        client.complete("openai/gpt-4-turbo", "test", reasoning_effort=None)
+        for body in captured:
+            self.assertNotIn("reasoning_effort", body)
+            self.assertNotIn("reasoning", body)
+            self.assertNotIn("max_completion_tokens", body)
+            self.assertNotIn("max_tokens", body)
+            self.assertEqual(body["model"], "openai/gpt-4-turbo")
+        client.complete("other/model", "test", reasoning_effort="none")
+        self.assertEqual(captured[-1]["reasoning_effort"], "none")
+
+    def test_non_reasoning_model_allows_only_omitted_effort(self):
+        model = ModelInfo(
+            requested_id="openai/gpt-4-turbo", model_id="openai/gpt-4-turbo",
+            name="GPT-4 Turbo", prompt_rate_usd_per_million=Decimal("10"),
+            completion_rate_usd_per_million=Decimal("30"),
+            pricing_source="fixture", pricing_retrieved_at="fixture",
+            supported_parameters=("temperature", "max_tokens"),
+        )
+        OpenRouterClient.validate_reasoning_effort(model, None)
+        with self.assertRaisesRegex(ValueError, "does not advertise"):
+            OpenRouterClient.validate_reasoning_effort(model, "low")
+        for effort in ("", " low", "low effort", 42):
+            with self.subTest(effort=effort), self.assertRaises(ValueError):
+                OpenRouterClient.validate_reasoning_effort(model, effort)
 
     def test_http_429_retry_after_seconds_and_http_date_are_parsed(self):
         def seconds_opener(request, timeout):
@@ -106,7 +140,7 @@ class OpenRouterClientTests(unittest.TestCase):
                 io.BytesIO(b"{}"),
             )
 
-        client = OpenRouterClient("test-secret", opener=seconds_opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=seconds_opener)
         with self.assertRaises(OpenRouterError) as caught:
             client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertEqual(caught.exception.retry_after_seconds, 12.5)
@@ -123,7 +157,7 @@ class OpenRouterClientTests(unittest.TestCase):
                 io.BytesIO(b"{}"),
             )
 
-        client = OpenRouterClient("test-secret", opener=date_opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=date_opener)
         with self.assertRaises(OpenRouterError) as caught:
             client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertGreater(caught.exception.retry_after_seconds, 0)
@@ -139,7 +173,7 @@ class OpenRouterClientTests(unittest.TestCase):
                 io.BytesIO(b"{}"),
             )
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         with self.assertRaises(OpenRouterError) as caught:
             client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertIsNone(caught.exception.retry_after_seconds)
@@ -148,7 +182,7 @@ class OpenRouterClientTests(unittest.TestCase):
         def opener(request, timeout):
             raise HTTPError(request.full_url, 503, "unavailable", {}, None)
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         with self.assertRaises(OpenRouterError) as caught:
             client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertEqual(caught.exception.status_code, 503)
@@ -165,7 +199,7 @@ class OpenRouterClientTests(unittest.TestCase):
                 {"id": "gen-high", "choices": [{"message": {"content": "PRIME"}}]}
             )
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         client.complete(
             "openai/gpt-6-luna",
             "Is 101 prime?",
@@ -180,7 +214,7 @@ class OpenRouterClientTests(unittest.TestCase):
             captured["url"] = request.full_url
             return FakeHTTPResponse({"data": {"total_cost": "0.01"}})
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         data = client.generation_details("gen /+ id")
         self.assertIn("id=gen+%2F%2B+id", captured["url"])
         self.assertEqual(data["data"]["total_cost"], "0.01")
@@ -197,7 +231,7 @@ class OpenRouterClientTests(unittest.TestCase):
                 io.BytesIO(json.dumps(payload).encode()),
             )
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         with self.assertRaises(OpenRouterError) as caught:
             client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertEqual(caught.exception.response_payload, payload)
@@ -207,7 +241,7 @@ class OpenRouterClientTests(unittest.TestCase):
         def opener(request, timeout):
             return FakeHTTPResponse({"id": "gen-empty", "usage": {"prompt_tokens": 4}})
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         response = client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertEqual(response["id"], "gen-empty")
         self.assertNotIn("choices", response)
@@ -222,7 +256,7 @@ class OpenRouterClientTests(unittest.TestCase):
         def opener(request, timeout):
             return FakeHTTPResponse(payload)
 
-        client = OpenRouterClient("test-secret", opener=opener)
+        client = OpenRouterClient("test-secret", timeout=2.0, opener=opener)
         with self.assertRaises(OpenRouterError) as caught:
             client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertTrue(caught.exception.retryable)
