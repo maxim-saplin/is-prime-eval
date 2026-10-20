@@ -42,6 +42,7 @@ class _ModelProgress:
     active_case: str | None = None
     active_attempt: int | None = None
     active_max_attempts: int | None = None
+    status: str | None = None
 
 
 class ProgressReporter:
@@ -147,8 +148,16 @@ class ProgressReporter:
     def _heartbeat_loop(self) -> None:
         while not self._heartbeat_stop.wait(self._heartbeat_interval):
             with self._lock:
-                if any(state.active_case is not None for state in self._models.values()):
-                    self._render_locked("waiting for model response")
+                active_states = [
+                    state for state in self._models.values()
+                    if state.active_case is not None
+                ]
+                if active_states:
+                    status = next(
+                        (state.status for state in active_states if state.status),
+                        "waiting for model response",
+                    )
+                    self._render_locked(status)
 
     def model_finished(
         self, model_id: str, reasoning_effort: str, *, success: bool
@@ -160,6 +169,7 @@ class ProgressReporter:
             self._finished_models.add(key)
             if key in self._models:
                 self._models[key].active_case = None
+                self._models[key].status = None
                 self._models[key].finished_at = time.monotonic()
             total = self._batch_total if self._batch_total is not None else len(self._models)
             if total > 0 and len(self._finished_models) >= total:
@@ -186,19 +196,32 @@ class ProgressReporter:
                 state.incorrect = int(event.get("incorrect", 0))
                 state.started_at = time.monotonic()
                 state.active_case = None
+                state.status = None
                 self._render_locked("run state loaded")
+                return
+
+            if event_type == "rate_limit_wait":
+                state.active_case = str(event.get("case_id", "request"))
+                state.active_attempt = int(event.get("attempt_number") or 1)
+                state.active_max_attempts = int(event.get("max_attempts") or 1)
+                state.status = "waiting for shared request gate"
+                self._start_heartbeat_locked()
+                if self._is_tty:
+                    self._render_locked(state.status)
                 return
 
             if event_type == "attempt_started":
                 state.active_case = str(event.get("case_id", "request"))
                 state.active_attempt = int(event.get("attempt_number") or 1)
                 state.active_max_attempts = int(event.get("max_attempts") or 1)
+                state.status = "waiting for model response"
                 self._start_heartbeat_locked()
                 self._render_locked("request started")
                 return
 
             if event_type == "attempt_cancelled_before_dispatch":
                 state.active_case = None
+                state.status = None
                 self._render_locked("cancelled before dispatch")
                 return
 
@@ -222,6 +245,7 @@ class ProgressReporter:
             if case_id:
                 state.seen_case_ids.add(case_id)
             state.active_case = None
+            state.status = None
             state.completed = min(state.total, state.completed + 1)
             count = event.get("completion_tokens")
             if isinstance(count, int) and count >= 0:

@@ -10,6 +10,7 @@ import threading
 from typing import Any, Callable, Sequence
 
 from openrouter import ModelInfo, OpenRouterClient
+from request_gate import AccountRequestGate
 from runner import RunConfig, prepare_case_dataset, run_new
 
 
@@ -53,6 +54,7 @@ def run_many(
         first_config.retry_delay_seconds,
         first_config.timeout_seconds,
         first_config.max_completion_tokens,
+        first_config.min_request_interval_seconds,
     )
     if any(
         (
@@ -63,6 +65,7 @@ def run_many(
             spec.config.retry_delay_seconds,
             spec.config.timeout_seconds,
             spec.config.max_completion_tokens,
+            spec.config.min_request_interval_seconds,
         )
         != shared_settings
         for spec in specs[1:]
@@ -72,6 +75,11 @@ def run_many(
     if len(set(identities)) != len(identities):
         raise ValueError("parallel model_id/reasoning_effort identities must be unique")
     worker_count = min(parallelism, len(specs))
+    request_gate = (
+        AccountRequestGate(first_config.min_request_interval_seconds)
+        if first_config.min_request_interval_seconds > 0
+        else None
+    )
 
     prepared_dataset = prepare_case_dataset(results_dir=results_dir, config=first_config)
     if on_progress is not None:
@@ -96,6 +104,7 @@ def run_many(
             on_progress=on_progress,
             prepared_dataset=prepared_dataset,
             cancel_event=cancellation,
+            request_gate=request_gate,
         )
         return index, {"spec": spec, "result": result, "error": None}
 

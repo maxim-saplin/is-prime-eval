@@ -79,6 +79,29 @@ class FakeClient:
         }
 
 
+class RetryBurstClient(FakeClient):
+    def __init__(self, failures):
+        super().__init__()
+        self.failures_remaining = failures
+
+    def complete(self, model_id, prompt, *, reasoning_effort, max_completion_tokens):
+        if self.failures_remaining:
+            self.failures_remaining -= 1
+            self.calls.append({"model_id": model_id, "prompt": prompt})
+            raise OpenRouterError(
+                "temporary upstream failure",
+                status_code=503,
+                retryable=True,
+                may_have_been_billed=True,
+            )
+        return super().complete(
+            model_id,
+            prompt,
+            reasoning_effort=reasoning_effort,
+            max_completion_tokens=max_completion_tokens,
+        )
+
+
 class NoChoicesClient(FakeClient):
     def complete(self, model_id, prompt, *, reasoning_effort, max_completion_tokens):
         self.calls.append({"model_id": model_id, "prompt": prompt})
@@ -241,6 +264,103 @@ class RunnerTests(unittest.TestCase):
                 ledger_path=result["ledger_path"],
                 overrides={"reasoning_effort": "medium"},
             )
+
+    def test_default_retry_budget_is_five_retries_six_total_attempts(self):
+        from runner import DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_RETRIES
+
+        self.assertEqual(DEFAULT_MAX_RETRIES, 5)
+        self.assertEqual(DEFAULT_MAX_ATTEMPTS, 6)
+
+    def test_backoff_doubles_with_bounded_jitter(self):
+        client = RetryBurstClient(failures=5)
+        config = RunConfig(
+            **{
+                **self.config.__dict__,
+                "max_attempts": 6,
+                "retry_delay_seconds": 1.0,
+            }
+        )
+        with (
+            patch("runner.random.uniform", side_effect=lambda _low, high: high),
+            patch("runner.time.sleep") as sleep,
+        ):
+            result = run_new(
+                client=client,
+                config=config,
+                model_info=self.model_info,
+                results_dir=self.results_dir,
+            )
+        self.assertTrue(result["complete"])
+        self.assertEqual(len(client.calls), 7)
+        delays = [call.args[0] for call in sleep.call_args_list]
+        self.assertEqual(len(delays), 5)
+        for actual, expected in zip(delays, (1.2, 2.4, 4.8, 9.6, 19.2)):
+            self.assertAlmostEqual(actual, expected)
+
+    def test_rate_gate_cancellation_does_not_start_or_consume_an_attempt(self):
+        class CancellingGate:
+            def acquire(self, cancel_event, *, on_admitted=None):
+                cancel_event.set()
+                return False
+
+        cancel_event = threading.Event()
+        client = FakeClient()
+        result = run_new(
+            client=client,
+            config=self.config,
+            model_info=self.model_info,
+            results_dir=self.results_dir,
+            cancel_event=cancel_event,
+            request_gate=CancellingGate(),
+        )
+        events, _ = runner_module.load_events(result["ledger_path"])
+        self.assertFalse(result["complete"])
+        self.assertEqual(client.calls, [])
+        self.assertFalse(any(event.get("event_type") == "attempt_started" for event in events))
+        self.assertEqual(summarize_run(result["ledger_path"])["attempt_count"], 0)
+
+    def test_429_retry_after_is_persisted_and_applies_shared_cooldown(self):
+        class RateLimitClient(FakeClient):
+            def complete(self, model_id, prompt, *, reasoning_effort, max_completion_tokens):
+                self.calls.append({"model_id": model_id, "prompt": prompt})
+                raise OpenRouterError(
+                    "OpenRouter returned HTTP 429",
+                    status_code=429,
+                    retryable=True,
+                    may_have_been_billed=True,
+                    retry_after_seconds=7.5,
+                )
+
+        class RecordingGate:
+            def __init__(self):
+                self.acquisitions = 0
+                self.cooldowns = []
+
+            def acquire(self, _cancel_event, *, on_admitted=None):
+                self.acquisitions += 1
+                return on_admitted is None or on_admitted()
+
+            def cool_down(self, retry_after_seconds):
+                self.cooldowns.append(retry_after_seconds)
+                return max(60.0, retry_after_seconds or 0.0)
+
+        client = RateLimitClient()
+        gate = RecordingGate()
+        config = RunConfig(**{**self.config.__dict__, "max_attempts": 1})
+        result = run_new(
+            client=client,
+            config=config,
+            model_info=self.model_info,
+            results_dir=self.results_dir,
+            request_gate=gate,
+        )
+        events, _ = runner_module.load_events(result["ledger_path"])
+        failures = [event for event in events if event.get("event_type") == "attempt_failed"]
+        self.assertEqual(gate.acquisitions, 2)
+        self.assertEqual(gate.cooldowns, [7.5, 7.5])
+        self.assertTrue(all(event["retry_after_seconds"] == 7.5 for event in failures))
+        self.assertTrue(all(event["shared_cooldown_seconds"] == 60.0 for event in failures))
+        self.assertEqual(len(failures), 2)
 
     def test_retry_transient_error_but_cost_unknown_is_not_zero(self):
         client = FakeClient(fail_first=True)

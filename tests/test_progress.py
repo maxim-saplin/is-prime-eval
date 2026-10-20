@@ -180,6 +180,24 @@ class ProgressReporterTests(unittest.TestCase):
         self.assertIn("tok/s", " ".join(rows))
         reporter.close()
 
+    def test_heartbeat_reports_waiting_for_shared_request_gate(self):
+        output = io.StringIO()
+        reporter = ProgressReporter(stream=output, heartbeat_interval=0.1, force_tty=True)
+        reporter.register_model("provider/slow-model", "low", 2)
+        reporter(
+            {
+                "event": "rate_limit_wait",
+                "model_id": "provider/slow-model",
+                "reasoning_effort": "low",
+                "case_id": "d10-1000000007",
+                "attempt_number": 1,
+                "max_attempts": 6,
+            }
+        )
+        time.sleep(0.25)
+        reporter.close()
+        self.assertIn("waiting for shared request gate", output.getvalue())
+
     def test_heartbeat_reports_a_slow_nonstreaming_request(self):
         output = io.StringIO()
         reporter = ProgressReporter(stream=output, heartbeat_interval=0.1, force_tty=True)

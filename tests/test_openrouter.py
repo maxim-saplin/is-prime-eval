@@ -1,7 +1,9 @@
 import io
 import json
 import unittest
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from email.utils import format_datetime
 from urllib.error import HTTPError
 
 from openrouter import ModelInfo, OpenRouterClient, OpenRouterError
@@ -94,6 +96,54 @@ class OpenRouterClientTests(unittest.TestCase):
         self.assertEqual(result["choices"][0]["message"]["content"], "PRIME")
         self.assertNotIn("do-not-log-this", repr(result))
 
+    def test_http_429_retry_after_seconds_and_http_date_are_parsed(self):
+        def seconds_opener(request, timeout):
+            raise HTTPError(
+                request.full_url,
+                429,
+                "rate limited",
+                {"Retry-After": "12.5"},
+                io.BytesIO(b"{}"),
+            )
+
+        client = OpenRouterClient("test-secret", opener=seconds_opener)
+        with self.assertRaises(OpenRouterError) as caught:
+            client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
+        self.assertEqual(caught.exception.retry_after_seconds, 12.5)
+
+        retry_at = datetime.now(timezone.utc) + timedelta(seconds=90)
+        http_date = format_datetime(retry_at, usegmt=True)
+
+        def date_opener(request, timeout):
+            raise HTTPError(
+                request.full_url,
+                429,
+                "rate limited",
+                {"Retry-After": http_date},
+                io.BytesIO(b"{}"),
+            )
+
+        client = OpenRouterClient("test-secret", opener=date_opener)
+        with self.assertRaises(OpenRouterError) as caught:
+            client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
+        self.assertGreater(caught.exception.retry_after_seconds, 0)
+        self.assertLessEqual(caught.exception.retry_after_seconds, 90)
+
+    def test_http_429_malformed_retry_after_is_ignored(self):
+        def opener(request, timeout):
+            raise HTTPError(
+                request.full_url,
+                429,
+                "rate limited",
+                {"Retry-After": "not-a-date"},
+                io.BytesIO(b"{}"),
+            )
+
+        client = OpenRouterClient("test-secret", opener=opener)
+        with self.assertRaises(OpenRouterError) as caught:
+            client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
+        self.assertIsNone(caught.exception.retry_after_seconds)
+
     def test_http_failure_is_sanitized_and_retryable(self):
         def opener(request, timeout):
             raise HTTPError(request.full_url, 503, "unavailable", {}, None)
@@ -165,7 +215,7 @@ class OpenRouterClientTests(unittest.TestCase):
     def test_http_200_structured_error_is_preserved_and_classified(self):
         payload = {
             "id": "gen-structured-error",
-            "error": {"code": 429, "message": "provider busy"},
+            "error": {"code": 429, "message": "provider busy", "retry_after": "4.5"},
             "usage": {"prompt_tokens": 9, "cost": 0.0002},
         }
 
@@ -177,6 +227,7 @@ class OpenRouterClientTests(unittest.TestCase):
             client.complete("openai/gpt-6-luna", "test", reasoning_effort="low")
         self.assertTrue(caught.exception.retryable)
         self.assertEqual(caught.exception.response_payload, payload)
+        self.assertEqual(caught.exception.retry_after_seconds, 4.5)
         self.assertNotIn("test-secret", repr(caught.exception.response_payload))
 
 

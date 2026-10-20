@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from cases import is_prime
 from openrouter import ModelInfo, OpenRouterClient
-from run import build_parser, main, parse_depths
+from run import _settings, build_parser, main, parse_depths
 from runner import RunConfig, run_new
 
 
@@ -61,11 +61,24 @@ class RunCliTests(unittest.TestCase):
         self.assertEqual(args.model_id, ["openai/gpt-6-luna"])
         self.assertEqual(args.reasoning_effort, ["high"])
 
+    def test_default_retry_and_rate_settings_are_six_attempts_at_15_rpm(self):
+        args = build_parser().parse_args([])
+        settings = _settings(args)
+        self.assertEqual(settings["max_attempts"], 6)
+        self.assertEqual(settings["min_request_interval_seconds"], 4.0)
+        explicit = build_parser().parse_args(
+            ["--max-retries", "5", "--requests-per-minute", "15"]
+        )
+        explicit_settings = _settings(explicit)
+        self.assertEqual(explicit_settings["max_attempts"], 6)
+        self.assertEqual(explicit_settings["min_request_interval_seconds"], 4.0)
+
     def test_old_alias_and_qualifier_syntax_is_rejected(self):
         for argv in (
             ["--model-qualifier", "gpt-6-luna-low"],
             ["--model", "openai/gpt-6-luna"],
             ["--model-id", "openai/gpt-6-luna", "--model-alias", "luna-low"],
+            ["--max-attempts", "6"],
         ):
             with self.subTest(argv=argv), redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit) as caught:
@@ -109,6 +122,9 @@ class RunCliTests(unittest.TestCase):
         self.assertEqual(text.count("Model ID: openai/gpt-6-luna"), 2)
         self.assertIn("Reasoning effort: low", text)
         self.assertIn("Reasoning effort: high", text)
+        self.assertIn("Maximum retries per case: 5 (6 total attempts)", text)
+        self.assertIn("Maximum completion attempts including retries: 840", text)
+        self.assertIn("Shared maximum request rate: 15.00 per minute (4.00s minimum spacing)", text)
         hashes = [line.split(": ", 1)[1] for line in text.splitlines() if line.startswith("Dataset SHA-256:")]
         self.assertEqual(len(hashes), 2)
         self.assertEqual(hashes[0], hashes[1])

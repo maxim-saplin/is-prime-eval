@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
+import signal
 import sys
 from typing import Sequence
 
@@ -15,8 +17,9 @@ from openrouter import OpenRouterClient, OpenRouterError
 from progress import ProgressReporter
 from runner import (
     DEFAULT_DEPTHS,
-    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_MAX_RETRIES,
     DEFAULT_MAX_COMPLETION_TOKENS,
+    DEFAULT_MIN_REQUEST_INTERVAL_SECONDS,
     DEFAULT_RETRY_DELAY_SECONDS,
     DEFAULT_SAMPLES_PER_CLASS,
     DEFAULT_SEED,
@@ -83,8 +86,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prime and non-prime cases per digit depth (default: 10 each)",
     )
     parser.add_argument("--seed", type=int, help="Reproducible case-generation seed (default: 2026)")
-    parser.add_argument("--max-attempts", type=int, help="Maximum API attempts per case (default: 3)")
-    parser.add_argument("--retry-delay", type=float, help="Initial retry delay in seconds (default: 1)")
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        help="Retries after the initial request per case (default: 5; 6 total attempts)",
+    )
+    parser.add_argument("--retry-delay", type=float, help="Exponential backoff base in seconds (default: 1)")
+    parser.add_argument(
+        "--requests-per-minute",
+        type=float,
+        help="Shared maximum completion dispatch rate across model workers (default: 15)",
+    )
     parser.add_argument("--timeout", type=float, help="OpenRouter request timeout in seconds (default: 90)")
     parser.add_argument(
         "--max-completion-tokens",
@@ -111,7 +123,14 @@ def _settings(args: argparse.Namespace) -> dict:
             else DEFAULT_SAMPLES_PER_CLASS
         ),
         "seed": args.seed if args.seed is not None else DEFAULT_SEED,
-        "max_attempts": args.max_attempts if args.max_attempts is not None else DEFAULT_MAX_ATTEMPTS,
+        "max_attempts": (
+            (args.max_retries if args.max_retries is not None else DEFAULT_MAX_RETRIES) + 1
+        ),
+        "min_request_interval_seconds": (
+            60.0 / args.requests_per_minute
+            if args.requests_per_minute is not None
+            else DEFAULT_MIN_REQUEST_INTERVAL_SECONDS
+        ),
         "retry_delay_seconds": (
             args.retry_delay
             if args.retry_delay is not None
@@ -149,13 +168,17 @@ def _dry_run_text(plan: dict) -> str:
         f"Resolved model name: {plan['resolved_model_name']}",
         f"Digit depths: {', '.join(map(str, plan['depths']))}",
         f"Cases per depth: {plan['samples_per_class']} prime + {plan['samples_per_class']} non-prime",
-        f"Total cases / inference requests: {plan['case_count']}",
+        f"Total cases / first attempts: {plan['case_count']}",
+        f"Maximum completion attempts including retries: {plan['max_total_inference_attempts']}",
         f"Seed: {plan['seed']}",
         f"Dataset SHA-256: {plan['dataset_sha256']}",
         f"Uncached input price: ${plan['prompt_rate_usd_per_million']} / 1M tokens",
         f"Output price: ${plan['completion_rate_usd_per_million']} / 1M tokens",
         f"Output-only cap estimate at token/attempt limits (input excluded): ${plan['max_output_cost_bound_usd']}",
-        f"Maximum attempts per case: {plan['max_attempts']}",
+        f"Maximum retries per case: {plan['max_retries']} ({plan['max_attempts']} total attempts)",
+        f"Shared maximum request rate: {60.0 / plan['min_request_interval_seconds']:.2f} per minute "
+        f"({plan['min_request_interval_seconds']:.2f}s minimum spacing)",
+        f"429 cooldown: max(Retry-After, {plan['default_429_cooldown_seconds']:.0f}s safety floor)",
         f"Maximum completion tokens per request: {plan['max_completion_tokens']}",
         f"Pricing source: {plan['pricing_source']} ({plan['pricing_retrieved_at']})",
         "Requests by depth: " + ", ".join(
@@ -183,6 +206,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.parallelism <= 0:
         parser.error("--parallelism must be positive")
+    if args.max_retries is not None and args.max_retries < 0:
+        parser.error("--max-retries cannot be negative")
+    if (
+        args.requests_per_minute is not None
+        and (not math.isfinite(args.requests_per_minute) or args.requests_per_minute <= 0)
+    ):
+        parser.error("--requests-per-minute must be finite and positive")
     run_settings = (
         args.output,
         args.dry_run,
@@ -191,8 +221,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.depths is not None,
         args.samples_per_class is not None,
         args.seed is not None,
-        args.max_attempts is not None,
+        args.max_retries is not None,
         args.retry_delay is not None,
+        args.requests_per_minute is not None,
         args.timeout is not None,
         args.max_completion_tokens is not None,
     )
@@ -320,5 +351,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     return exit_code
 
 
+def _raise_sigterm_as_keyboard_interrupt(signum, _frame):
+    raise KeyboardInterrupt(f"received {signal.Signals(signum).name}")
+
+
+def _install_cli_signal_handlers() -> None:
+    # Background shells can propagate SIG_IGN for SIGINT; override it so the
+    # runner's cooperative cancellation path can drain in-flight requests.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _raise_sigterm_as_keyboard_interrupt)
+
+
 if __name__ == "__main__":
+    _install_cli_signal_handlers()
     raise SystemExit(main())

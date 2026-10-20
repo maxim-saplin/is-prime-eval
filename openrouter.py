@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+from email.utils import parsedate_to_datetime
 import json
+import math
 import time
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError, URLError
@@ -15,6 +17,27 @@ from urllib.request import Request, urlopen
 from costs import as_decimal
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def _parse_retry_after(value: Any) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        seconds = float(text)
+    except ValueError:
+        try:
+            parsed = parsedate_to_datetime(text)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        seconds = (parsed - datetime.now(timezone.utc)).total_seconds()
+    if not math.isfinite(seconds):
+        return None
+    return max(0.0, seconds)
 
 
 def utc_now() -> str:
@@ -44,11 +67,13 @@ class OpenRouterError(RuntimeError):
         retryable: bool = False,
         may_have_been_billed: bool = True,
         response_payload: dict[str, Any] | None = None,
+        retry_after_seconds: float | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.retryable = retryable
         self.may_have_been_billed = may_have_been_billed
+        self.retry_after_seconds = retry_after_seconds
         # Structured provider error/usage data can be logged without including
         # request headers or the API key.
         self.response_payload = response_payload
@@ -96,6 +121,9 @@ class OpenRouterClient:
         except HTTPError as exc:
             status = int(exc.code)
             body = exc.read()
+            retry_after = _parse_retry_after(
+                exc.headers.get("Retry-After") if exc.headers is not None else None
+            )
             try:
                 parsed_body = json.loads(body.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError):
@@ -108,6 +136,7 @@ class OpenRouterClient:
                 retryable=retryable,
                 may_have_been_billed=may_be_billed,
                 response_payload=parsed_body if isinstance(parsed_body, dict) else None,
+                retry_after_seconds=retry_after,
             ) from None
         except (URLError, TimeoutError, OSError) as exc:
             # The request may have reached OpenRouter before the connection
@@ -246,6 +275,7 @@ class OpenRouterClient:
                 retryable=retryable,
                 may_have_been_billed=(status is None or status >= 500 or status in {408, 409, 425, 429}),
                 response_payload=response,
+                retry_after_seconds=_parse_retry_after(provider_error.get("retry_after")),
             )
         # A successful HTTP response without choices/error is treated as an
         # invalid model response by the parser; it is not re-queried.

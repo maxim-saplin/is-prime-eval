@@ -7,6 +7,7 @@ import time
 import unittest
 from pathlib import Path
 from contextlib import redirect_stderr
+from dataclasses import replace
 from unittest.mock import patch
 
 from cases import is_prime
@@ -14,6 +15,7 @@ import multi_run
 from multi_run import ModelRunSpec, run_many
 from openrouter import ModelInfo
 from progress import ProgressReporter
+from request_gate import AccountRequestGate
 from report import summarize_run
 from runner import RunConfig
 
@@ -146,6 +148,46 @@ class MultiRunTests(unittest.TestCase):
             self.assertIn("ETA", output.getvalue())
             self.assertIn("tok/s", output.getvalue())
             self.assertIn("batch elapsed", output.getvalue())
+
+    def test_parallel_workers_share_one_account_request_gate(self):
+        class TrackingGate(AccountRequestGate):
+            instances = []
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.acquisitions = 0
+                self._acquisition_lock = threading.Lock()
+                type(self).instances.append(self)
+
+            def acquire(self, cancel_event=None, *, on_admitted=None):
+                with self._acquisition_lock:
+                    self.acquisitions += 1
+                return super().acquire(cancel_event, on_admitted=on_admitted)
+
+        TrackingGate.instances = []
+        metrics = ParallelMetrics()
+        specs = [
+            self._spec("provider/model-a", "low"),
+            self._spec("provider/model-b", "low"),
+        ]
+        specs = [
+            ModelRunSpec(
+                config=replace(spec.config, min_request_interval_seconds=0.001),
+                model_info=spec.model_info,
+            )
+            for spec in specs
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("multi_run.AccountRequestGate", TrackingGate):
+                results = run_many(
+                    specs,
+                    client_factory=lambda _timeout: ParallelFakeClient(metrics),
+                    results_dir=Path(temp_dir) / "results",
+                    parallelism=2,
+                )
+        self.assertEqual(len(TrackingGate.instances), 1)
+        self.assertEqual(TrackingGate.instances[0].acquisitions, 4)
+        self.assertTrue(all(row["error"] is None for row in results))
 
     def test_ctrl_c_stops_queued_models_and_leaves_resumable_ledgers(self):
         metrics = InterruptMetrics()

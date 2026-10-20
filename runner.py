@@ -7,7 +7,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import hashlib
 import json
+import math
 import os
+import random
 from pathlib import Path
 import re
 import threading
@@ -26,14 +28,19 @@ from events import append_event, ledger_lock, load_events
 from openrouter import ModelInfo, OpenRouterClient, OpenRouterError
 from parse import parse_response
 from prompt import make_prompt
+from request_gate import AccountRequestGate
 
 DEFAULT_DEPTHS = tuple(range(4, 11))
 DEFAULT_SAMPLES_PER_CLASS = 10
 DEFAULT_SEED = 2026
-DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_MAX_RETRIES = 5
+DEFAULT_MAX_ATTEMPTS = DEFAULT_MAX_RETRIES + 1
 DEFAULT_RETRY_DELAY_SECONDS = 1.0
+DEFAULT_RETRY_JITTER_FRACTION = 0.2
 DEFAULT_TIMEOUT_SECONDS = 90.0
 DEFAULT_MAX_COMPLETION_TOKENS = 512
+DEFAULT_MIN_REQUEST_INTERVAL_SECONDS = 4.0
+DEFAULT_429_COOLDOWN_SECONDS = 60.0
 RUN_SCHEMA_VERSION = 1
 DATASET_SCHEMA_VERSION = 1
 PROMPT_VERSION = "prime-label-v1"
@@ -72,6 +79,7 @@ class RunConfig:
     retry_delay_seconds: float = DEFAULT_RETRY_DELAY_SECONDS
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     max_completion_tokens: int = DEFAULT_MAX_COMPLETION_TOKENS
+    min_request_interval_seconds: float = 0.0
 
     def validate(self) -> None:
         if not isinstance(self.model_id, str) or not self.model_id.strip():
@@ -95,12 +103,30 @@ class RunConfig:
         if self.max_completion_tokens <= 0:
             raise ValueError("max_completion_tokens must be positive")
         if (
+            not math.isfinite(self.min_request_interval_seconds)
+            or self.min_request_interval_seconds < 0
+        ):
+            raise ValueError("min_request_interval_seconds must be finite and non-negative")
+        if (
             not isinstance(self.reasoning_effort, str)
             or not self.reasoning_effort
             or self.reasoning_effort != self.reasoning_effort.strip()
             or any(character.isspace() for character in self.reasoning_effort)
         ):
             raise ValueError("reasoning_effort must be explicitly specified as a non-empty value")
+
+
+def _request_gate_for_config(
+    config: RunConfig, request_gate: AccountRequestGate | None
+) -> AccountRequestGate | None:
+    if request_gate is not None:
+        return request_gate
+    if config.min_request_interval_seconds <= 0:
+        return None
+    return AccountRequestGate(
+        config.min_request_interval_seconds,
+        default_429_cooldown_seconds=DEFAULT_429_COOLDOWN_SECONDS,
+    )
 
 
 def _utc_now() -> str:
@@ -384,6 +410,9 @@ def _config_from_manifest(manifest: Mapping[str, Any]) -> RunConfig:
         retry_delay_seconds=float(config["retry_delay_seconds"]),
         timeout_seconds=float(config["timeout_seconds"]),
         max_completion_tokens=int(config["max_completion_tokens"]),
+        min_request_interval_seconds=float(
+            config.get("min_request_interval_seconds", DEFAULT_MIN_REQUEST_INTERVAL_SECONDS)
+        ),
     )
 
 
@@ -734,6 +763,7 @@ def _execute_run(
     events: list[dict[str, Any]],
     on_progress: ProgressCallback | None = None,
     cancel_event: threading.Event | None = None,
+    request_gate: AccountRequestGate | None = None,
 ) -> dict[str, Any]:
     run_id = str(manifest["run_id"])
     events = _append_orphan_attempts(ledger_path, run_id, events)
@@ -831,38 +861,48 @@ def _execute_run(
                     break
                 attempt_id = uuid4().hex
                 prompt_text = make_prompt(case.number)
-                attempt_started_at = _utc_now()
-                attempt_started_monotonic = time.monotonic()
-                append_event(
-                    ledger_path,
-                    {
-                        "event_type": "attempt_started",
-                        "run_id": run_id,
-                        "trial_id": case.case_id,
-                        "case_id": case.case_id,
-                        "attempt_id": attempt_id,
-                        "attempt_number": next_attempt,
-                        "depth": case.depth,
-                        "number": case.number,
-                        "gold_label": case.label,
-                        "model_id": config.model_id,
-                        "reasoning_effort": config.reasoning_effort,
-                        "prompt_version": PROMPT_VERSION,
-                        "prompt_sha256": hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
-                    },
-                )
-                if on_progress:
-                    on_progress(
+                attempt_started_at: str | None = None
+                attempt_started_monotonic: float | None = None
+
+                def persist_attempt_start() -> bool:
+                    nonlocal attempt_started_at, attempt_started_monotonic
+                    if cancel_event is not None and cancel_event.is_set():
+                        return False
+                    attempt_started_at = _utc_now()
+                    attempt_started_monotonic = time.monotonic()
+                    append_event(
+                        ledger_path,
                         {
-                            "event": "attempt_started",
-                            "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
+                            "event_type": "attempt_started",
+                            "run_id": run_id,
+                            "trial_id": case.case_id,
                             "case_id": case.case_id,
+                            "attempt_id": attempt_id,
                             "attempt_number": next_attempt,
-                            "max_attempts": max_attempts,
-                            "total_cases": len(cases),
-                        }
+                            "depth": case.depth,
+                            "number": case.number,
+                            "gold_label": case.label,
+                            "model_id": config.model_id,
+                            "reasoning_effort": config.reasoning_effort,
+                            "prompt_version": PROMPT_VERSION,
+                            "prompt_sha256": hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
+                        },
                     )
-                if cancel_event is not None and cancel_event.is_set():
+                    if on_progress:
+                        on_progress(
+                            {
+                                "event": "attempt_started",
+                                "model_id": config.model_id,
+                                "reasoning_effort": config.reasoning_effort,
+                                "case_id": case.case_id,
+                                "attempt_number": next_attempt,
+                                "max_attempts": max_attempts,
+                                "total_cases": len(cases),
+                            }
+                        )
+                    return True
+
+                def cancel_before_dispatch() -> None:
                     append_event(
                         ledger_path,
                         {
@@ -881,12 +921,37 @@ def _execute_run(
                         on_progress(
                             {
                                 "event": "attempt_cancelled_before_dispatch",
-                                "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
+                                "model_id": config.model_id,
+                                "reasoning_effort": config.reasoning_effort,
                                 "case_id": case.case_id,
                                 "attempt_number": next_attempt,
                                 "total_cases": len(cases),
                             }
                         )
+
+                if request_gate is not None:
+                    if on_progress:
+                        on_progress(
+                            {
+                                "event": "rate_limit_wait",
+                                "model_id": config.model_id,
+                                "reasoning_effort": config.reasoning_effort,
+                                "case_id": case.case_id,
+                                "attempt_number": next_attempt,
+                                "max_attempts": max_attempts,
+                                "total_cases": len(cases),
+                            }
+                        )
+                    admitted = request_gate.acquire(
+                        cancel_event,
+                        on_admitted=persist_attempt_start,
+                    )
+                else:
+                    admitted = persist_attempt_start()
+                if not admitted:
+                    break
+                if cancel_event is not None and cancel_event.is_set():
+                    cancel_before_dispatch()
                     break
                 try:
                     response = client.complete(
@@ -896,6 +961,11 @@ def _execute_run(
                         max_completion_tokens=config.max_completion_tokens,
                     )
                 except OpenRouterError as exc:
+                    shared_cooldown_seconds = None
+                    if exc.status_code == 429 and request_gate is not None:
+                        shared_cooldown_seconds = request_gate.cool_down(
+                            exc.retry_after_seconds
+                        )
                     error_payload = exc.response_payload or {}
                     error_usage = extract_usage(error_payload)
                     error_provider_cost = extract_provider_cost_usd(error_payload)
@@ -915,6 +985,8 @@ def _execute_run(
                             "attempt_number": next_attempt,
                             "status_code": exc.status_code,
                             "retryable": exc.retryable,
+                            "retry_after_seconds": exc.retry_after_seconds,
+                            "shared_cooldown_seconds": shared_cooldown_seconds,
                             "may_have_been_billed": exc.may_have_been_billed,
                             "spend_status": (
                                 "reported" if error_provider_cost is not None
@@ -947,7 +1019,11 @@ def _execute_run(
                             }
                         )
                     if exc.retryable and next_attempt < max_attempts:
-                        delay = retry_delay * (2 ** (next_attempt - 1))
+                        base_delay = retry_delay * (2 ** (next_attempt - 1))
+                        delay = random.uniform(
+                            base_delay * (1 - DEFAULT_RETRY_JITTER_FRACTION),
+                            base_delay * (1 + DEFAULT_RETRY_JITTER_FRACTION),
+                        )
                         if cancel_event is not None:
                             if cancel_event.wait(delay):
                                 break
@@ -1165,6 +1241,7 @@ def _run_new_unlocked(
     on_progress: ProgressCallback | None = None,
     prepared_dataset: PreparedDataset | None = None,
     cancel_event: threading.Event | None = None,
+    request_gate: AccountRequestGate | None = None,
 ) -> dict[str, Any]:
     """Create a frozen dataset/run manifest and execute a new evaluation."""
     config.validate()
@@ -1220,6 +1297,7 @@ def _run_new_unlocked(
         events=events,
         on_progress=on_progress,
         cancel_event=cancel_event,
+        request_gate=_request_gate_for_config(config, request_gate),
     )
 
 
@@ -1233,6 +1311,7 @@ def run_new(
     on_progress: ProgressCallback | None = None,
     prepared_dataset: PreparedDataset | None = None,
     cancel_event: threading.Event | None = None,
+    request_gate: AccountRequestGate | None = None,
 ) -> dict[str, Any]:
     """Start a run while exclusively owning its target ledger."""
     root = Path(results_dir).resolve()
@@ -1252,6 +1331,7 @@ def run_new(
                 on_progress=on_progress,
                 prepared_dataset=prepared_dataset,
                 cancel_event=cancel_event,
+                request_gate=request_gate,
             )
     except KeyboardInterrupt as exc:
         raise EvaluationInterrupted(ledger) from exc
@@ -1276,6 +1356,7 @@ def _resume_run_unlocked(
     overrides: Mapping[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
     cancel_event: threading.Event | None = None,
+    request_gate: AccountRequestGate | None = None,
 ) -> dict[str, Any]:
     """Resume only pending cases from a matching frozen run/configuration."""
     ledger = Path(ledger_path).resolve()
@@ -1319,6 +1400,7 @@ def _resume_run_unlocked(
         events=events,
         on_progress=on_progress,
         cancel_event=cancel_event,
+        request_gate=_request_gate_for_config(config, request_gate),
     )
 
 
@@ -1329,6 +1411,7 @@ def resume_run(
     overrides: Mapping[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
     cancel_event: threading.Event | None = None,
+    request_gate: AccountRequestGate | None = None,
 ) -> dict[str, Any]:
     """Resume pending cases while exclusively owning the event ledger."""
     ledger = Path(ledger_path).resolve()
@@ -1340,6 +1423,7 @@ def resume_run(
                 overrides=overrides,
                 on_progress=on_progress,
                 cancel_event=cancel_event,
+                request_gate=request_gate,
             )
     except KeyboardInterrupt as exc:
         raise EvaluationInterrupted(ledger) from exc
@@ -1391,6 +1475,10 @@ def create_dry_run_plan(
         "pricing_source": model_info.pricing_source,
         "pricing_retrieved_at": model_info.pricing_retrieved_at,
         "max_attempts": config.max_attempts,
+        "max_retries": config.max_attempts - 1,
+        "max_total_inference_attempts": len(cases) * config.max_attempts,
+        "min_request_interval_seconds": config.min_request_interval_seconds,
+        "default_429_cooldown_seconds": DEFAULT_429_COOLDOWN_SECONDS,
         "max_completion_tokens": config.max_completion_tokens,
         "inference_requests": len(cases),
     }

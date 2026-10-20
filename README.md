@@ -46,7 +46,7 @@ A live run keeps the two settings separate:
 
 Both fields are required; no model or effort is silently selected. The effort string is passed unchanged to OpenRouter/the model. Supported values depend on the selected model/provider; if a value is rejected, the request error is recorded rather than silently substituted.
 
-Defaults for the test itself are depths `4-10`, 10 examples of each class per depth, seed `2026`, three total API attempts per case, and a 512-token completion limit. Retries are only for transient/API errors; invalid or truncated answers are recorded and are not retried for a better answer.
+Defaults for the test itself are depths `4-10`, 10 examples of each class per depth, seed `2026`, **five retries after the initial attempt** (six total attempts per case), and a 512-token completion limit. Transient/API retries use an exponential backoff with a 1-second base and bounded ±20% jitter; invalid or truncated answers are recorded and are not retried for a better answer. Set `--max-retries N` to change retries after the initial request.
 
 ## Parallel model runs
 
@@ -61,7 +61,16 @@ Repeat `--model-id` and `--reasoning-effort` for every run. The first effort pai
 
 A missing effort, extra effort, non-qualified model ID, or duplicate Model ID/Effort pair is rejected before inference. Each model receives the same frozen cases. `--parallelism` bounds the number of model runs in flight; requests within each model remain sequential. To repeat the same Model ID/Effort as a separate measurement, run it again in a separate command; each run has its own ID and leaderboard row.
 
-Progress is written to **stderr**, with Model ID and Effort shown separately: completed/scheduled cases, elapsed time, estimated remaining time, observed completion tokens per second, and correct/incorrect counts. In a terminal, each active model gets an in-place progress bar rather than a scrolling line per case; the dashboard is bounded to the active worker count, while the header tracks finished runs and final output lists every model. Redirected output is throttled to periodic summaries. A heartbeat refreshes elapsed time/ETA during slow non-streaming requests. Token speed is observed completion tokens divided by wall-clock time—not live generation speed—and completion totals include reasoning tokens when OpenRouter reports them. Per-model elapsed/ETA includes request time and retry backoff; a separate line reports total batch elapsed time. On Ctrl-C in a parallel batch, queued runs are saved as pending and no new case/retry requests are dispatched; an already in-flight request is allowed to finish and be logged before workers stop.
+The CLI applies a **shared account-request gate** across all workers and retries: default 15 completion dispatches per minute (4-second minimum spacing). HTTP 429 responses apply a coordinated cooldown to every worker for at least 60 seconds and for longer if `Retry-After` (delta-seconds or HTTP-date) requests it. Cancellation interrupts rate-gate waits and retry backoff before another attempt is recorded. The gate coordinates one evaluator process only; do not run another inference job with the same API key concurrently.
+
+The checked-in 13-pair script defaults to a no-completion preflight and requires `--live` explicitly to send requests. It takes a stable exclusive host lock for the whole live batch, canonicalizes the output path to reject aliases of the immutable old archive, and rejects reuse of a non-empty live-output directory. The lock serializes this script's batches; keep all other processes/clients using the same API key idle:
+
+```sh
+scripts/run_13_pair_sweep.sh --dry-run
+scripts/run_13_pair_sweep.sh --live
+```
+
+Progress is written to **stderr**, with Model ID and Effort shown separately: completed/scheduled cases, elapsed time, estimated remaining time, observed completion tokens per second, and correct/incorrect counts. In a terminal, each active model gets an in-place progress bar rather than a scrolling line per case; the dashboard is bounded to the active worker count, while the header tracks finished runs and final output lists every model. Redirected output is throttled to periodic summaries. A heartbeat refreshes elapsed time/ETA during slow non-streaming requests and shared rate-gate waits. Token speed is observed completion tokens divided by wall-clock time—not live generation speed—and completion totals include reasoning tokens when OpenRouter reports them. Per-model elapsed/ETA includes request time and retry backoff; a separate line reports total batch elapsed time. The CLI explicitly handles SIGINT and SIGTERM even if SIGINT was inherited as ignored: queued runs and gate/backoff waits are cancelled, while already-dispatched requests drain and are logged before workers stop.
 
 ## Resume
 
