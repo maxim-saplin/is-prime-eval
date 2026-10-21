@@ -1,3 +1,4 @@
+import io
 import json
 from decimal import Decimal
 import tempfile
@@ -9,6 +10,7 @@ from unittest.mock import patch
 import runner as runner_module
 from cases import is_prime
 from openrouter import ModelInfo, OpenRouterError
+from progress import ProgressReporter
 from report import render_leaderboard, summarize_run
 from runner import RunConfig, _new_ledger_path, resume_run, run_new
 
@@ -247,6 +249,52 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("Primes correctly identified", leaderboard)
         self.assertIn("Provider-reported cost", leaderboard)
         self.assertIn("Estimated cost without cache discounts", leaderboard)
+
+    def test_running_costs_match_report_after_retry_and_completed_resume(self):
+        client = FakeClient(fail_first=True)
+        with ProgressReporter(stream=io.StringIO()) as reporter:
+            result = run_new(
+                client=client, config=self.config, model_info=self.model_info,
+                results_dir=self.results_dir, on_progress=reporter,
+            )
+            state = reporter._models[(self.config.model_id, self.config.reasoning_effort)]
+            self.assertEqual(len(state.cost_attempts), 3)
+            summary = summarize_run(result["ledger_path"])
+            self.assertEqual(
+                sum(Decimal(row["provider_reported_usd"]) for row in state.cost_attempts.values() if row["provider_reported_usd"] is not None),
+                summary["provider_cost_total"],
+            )
+            self.assertEqual(sum(row["provider_reported_usd"] is not None for row in state.cost_attempts.values()), 2)
+            before = len(client.calls)
+            with ProgressReporter(stream=io.StringIO()) as resumed:
+                resume_run(client=client, ledger_path=result["ledger_path"], on_progress=resumed)
+                restored = resumed._models[(self.config.model_id, self.config.reasoning_effort)]
+                self.assertEqual(restored.cost_attempts, state.cost_attempts)
+            self.assertEqual(len(client.calls), before)
+
+    def test_progress_receives_final_metadata_cost_without_double_counting(self):
+        class EnrichedClient(FakeClient):
+            def complete(self, *args, **kwargs):
+                response = super().complete(*args, **kwargs)
+                response["usage"].pop("cost")
+                return response
+
+            def generation_details(self, generation_id):
+                return {"data": {
+                    "total_cost": "0.00003", "native_tokens_prompt": 12,
+                    "native_tokens_completion": 3,
+                }}
+
+        with ProgressReporter(stream=io.StringIO()) as reporter:
+            result = run_new(
+                client=EnrichedClient(), config=self.config, model_info=self.model_info,
+                results_dir=self.results_dir, on_progress=reporter,
+            )
+            costs = reporter._models[(self.config.model_id, self.config.reasoning_effort)].cost_attempts
+            self.assertEqual(len(costs), 2)
+            self.assertEqual(sum(Decimal(row["provider_reported_usd"]) for row in costs.values()), Decimal("0.00006"))
+            self.assertEqual(sum(Decimal(row["normalized_uncached_usd"]) for row in costs.values()), Decimal("0.0000054"))
+            self.assertEqual(summarize_run(result["ledger_path"])["provider_cost_total"], Decimal("0.00006"))
 
     def test_completed_run_resume_does_not_repeat_requests_and_checks_config(self):
         client = FakeClient()

@@ -2,6 +2,7 @@ import unittest
 from decimal import Decimal
 
 from costs import (
+    attempt_costs_from_events,
     estimate_uncached_cost_usd,
     extract_provider_cost_usd,
     extract_usage,
@@ -9,6 +10,23 @@ from costs import (
 
 
 class CostAccountingTests(unittest.TestCase):
+    def test_progress_cost_replay_replaces_updates_and_keeps_unknowns(self):
+        events = [
+            {"event_type": "attempt_started", "attempt_id": "priced"},
+            {"event_type": "attempt_response", "attempt_id": "priced", "provider_reported_usd": "0.1"},
+            {"event_type": "attempt_cost_update", "attempt_id": "priced", "provider_reported_usd": "0.2", "normalized_uncached_usd": "0"},
+            {"event_type": "attempt_cost_update", "attempt_id": "priced", "provider_reported_usd": None},
+            {"event_type": "attempt_started", "attempt_id": "unfinished"},
+            {"event_type": "attempt_started", "attempt_id": "cancelled"},
+            {"event_type": "attempt_cancelled_before_dispatch", "attempt_id": "cancelled"},
+            {"event_type": "cost_lookup_failed", "attempt_id": "priced", "provider_reported_usd": "9"},
+        ]
+        costs = attempt_costs_from_events(events)
+        self.assertEqual(set(costs), {"priced", "unfinished"})
+        self.assertEqual(costs["priced"]["provider_reported_usd"], "0.2")
+        self.assertEqual(costs["priced"]["normalized_uncached_usd"], "0")
+        self.assertIsNone(costs["unfinished"]["provider_reported_usd"])
+
     def test_uncached_estimate_prices_all_prompt_tokens_even_if_cached(self):
         usage = {
             "prompt_tokens": 1_000_000,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 MILLION = Decimal(1_000_000)
 
@@ -171,6 +171,38 @@ def extract_provider_cost_usd(
         if parsed is not None:
             return parsed
     return None
+
+
+def attempt_costs_from_events(
+    events: Iterable[Mapping[str, Any]],
+) -> dict[str, dict[str, str | None]]:
+    """Replay persisted attempt costs for progress, replacing enrichment updates.
+
+    A started request without final usage stays unknown. Cancelled-before-send
+    records are excluded, matching report accounting; absent dollars are not zero.
+    """
+    attempts: dict[str, dict[str, str | None]] = {}
+    relevant = {
+        "attempt_started", "attempt_response", "attempt_failed",
+        "attempt_interrupted", "attempt_cost_update", "attempt_cancelled_before_dispatch",
+    }
+    for event in events:
+        attempt_id = event.get("attempt_id")
+        kind = event.get("event_type")
+        if not attempt_id or kind not in relevant:
+            continue
+        key = str(attempt_id)
+        if kind == "attempt_cancelled_before_dispatch":
+            attempts.pop(key, None)
+            continue
+        row = attempts.setdefault(
+            key, {"provider_reported_usd": None, "normalized_uncached_usd": None}
+        )
+        for field in row:
+            value = as_decimal(event.get(field))
+            if value is not None:
+                row[field] = decimal_text(value)
+    return attempts
 
 
 def decimal_text(value: Decimal | None) -> str | None:

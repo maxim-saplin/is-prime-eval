@@ -5,7 +5,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from progress import ProgressReporter
+from progress import ProgressReporter, _cost_lines
 
 
 class TTYStringIO(io.StringIO):
@@ -133,7 +133,7 @@ class ProgressReporterTests(unittest.TestCase):
         text = output.getvalue()
         self.assertIn("[", text)
         self.assertIn("█", text)
-        self.assertIn("\x1b[3A", text)
+        self.assertIn("\x1b[7A", text)
         self.assertIn("Model ID: openai/gpt-6-luna | Effort: low", text)
 
     def test_many_parallel_models_stay_within_a_24_row_tty_viewport(self):
@@ -142,10 +142,10 @@ class ProgressReporterTests(unittest.TestCase):
         with patch("progress.shutil.get_terminal_size", return_value=os.terminal_size((80, 24))):
             reporter.set_active_model_limit(4)
             reporter.set_batch_total(13)
-            self.assertEqual(reporter._rendered_lines, 9)
+            self.assertEqual(reporter._rendered_lines, 19)
             for index in range(4):
                 reporter.register_model(f"provider/model-{index}", "low", 140)
-            self.assertEqual(reporter._rendered_lines, 9)
+            self.assertEqual(reporter._rendered_lines, 19)
 
             for index in range(4):
                 reporter.model_finished(f"provider/model-{index}", "low", success=True)
@@ -155,8 +155,8 @@ class ProgressReporterTests(unittest.TestCase):
 
         self.assertLessEqual(reporter._rendered_lines, 22)
         self.assertEqual(len(reporter._finished_models), 13)
-        self.assertIn("\x1b[9A", output.getvalue())
-        final_frame = output.getvalue().rsplit("\x1b[9A", 1)[1]
+        self.assertIn("\x1b[19A", output.getvalue())
+        final_frame = output.getvalue().rsplit("\x1b[19A", 1)[1]
         self.assertIn("13/13 done", final_frame)
         self.assertNotIn("Model ID:", final_frame)
         reporter.close()
@@ -167,13 +167,16 @@ class ProgressReporterTests(unittest.TestCase):
         state = reporter._models[("openai/gpt-6-luna", "high")]
         state.completed = 14
         state.output_tokens = 5_000
-        first_line, second_line = reporter._model_lines(("openai/gpt-6-luna", "high"), state, 79)
+        first_line, second_line, *cost_lines = reporter._model_lines(("openai/gpt-6-luna", "high"), state, 79)
         self.assertLessEqual(len(first_line), 79)
         self.assertLessEqual(len(second_line), 79)
         self.assertIn("Model ID:", first_line)
         self.assertIn("Effort:", first_line)
         self.assertIn("ETA", second_line)
         self.assertIn("tok/s", second_line)
+        self.assertTrue(all(len(line) <= 79 for line in cost_lines))
+        self.assertIn("Provider-reported USD:", cost_lines[0])
+        self.assertIn("Uncached estimate USD:", cost_lines[1])
         reporter.close()
 
     def test_redirected_progress_is_throttled(self):
@@ -193,7 +196,7 @@ class ProgressReporterTests(unittest.TestCase):
                 }
             )
         reporter.model_finished("openai/model", "low", success=True)
-        self.assertLessEqual(len(output.getvalue().splitlines()), 50)
+        self.assertLessEqual(len(output.getvalue().splitlines()), 100)
 
     def test_finished_model_elapsed_and_rate_freeze_while_batch_continues(self):
         reporter = ProgressReporter(stream=io.StringIO())
@@ -235,6 +238,58 @@ class ProgressReporterTests(unittest.TestCase):
         self.assertIn("cancel requested", " ".join(rows))
         self.assertIn("ETA", " ".join(rows))
         self.assertIn("tok/s", " ".join(rows))
+        reporter.close()
+
+    def test_costs_include_resume_retries_updates_and_exclude_cancelled_starts(self):
+        reporter = ProgressReporter(stream=io.StringIO())
+        identity = {"model_id": "provider/model", "reasoning_effort": None}
+        reporter({
+            **identity, "event": "run_progress_init", "total_cases": 2,
+            "cost_attempts": {
+                "old": {"provider_reported_usd": "0.1", "normalized_uncached_usd": "0.2"},
+                "orphan": {"provider_reported_usd": None, "normalized_uncached_usd": None},
+            },
+        })
+        reporter({**identity, "event": "attempt_started", "attempt_id": "failed"})
+        reporter({
+            **identity, "event": "attempt_failed", "attempt_id": "failed",
+            "provider_reported_usd": "0", "normalized_uncached_usd": "0.00001",
+        })
+        response = {
+            **identity, "event": "case_finished", "case_id": "case",
+            "attempt_id": "retry", "outcome": "correct",
+            "provider_reported_usd": "0.00002", "normalized_uncached_usd": "0.00004",
+        }
+        reporter(response)
+        reporter(response)  # duplicate callback is not extra spend
+        reporter({
+            **response, "event": "attempt_cost_update", "provider_reported_usd": "0.00003",
+        })
+        reporter({**identity, "event": "attempt_started", "attempt_id": "cancelled"})
+        reporter({**identity, "event": "attempt_cancelled_before_dispatch", "attempt_id": "cancelled"})
+        state = reporter._models[("provider/model", None)]
+        self.assertEqual(len(state.cost_attempts), 4)
+        self.assertEqual(state.completed, 1)
+        lines = _cost_lines(state.cost_attempts.values())
+        self.assertIn("partial $0.100030 (3/4 priced)", lines[0])
+        self.assertIn("partial $0.200050 (3/4 priced)", lines[1])
+        reporter.close()
+
+    def test_batch_cost_keeps_finished_workers_and_distinguishes_unknown_from_free(self):
+        output = io.StringIO()
+        reporter = ProgressReporter(stream=output)
+        reporter.set_batch_total(2)
+        for model, amount in (("provider/fast", "0.01"), ("provider/slow", "0.02")):
+            reporter.register_model(model, None, 1)
+            reporter({
+                "event": "case_finished", "model_id": model, "case_id": "case",
+                "attempt_id": model, "outcome": "correct",
+                "provider_reported_usd": amount, "normalized_uncached_usd": "0",
+            })
+            reporter.model_finished(model, None, success=True)
+        self.assertIn("Batch Provider-reported USD: $0.030000 (2/2 priced)", output.getvalue())
+        self.assertIn("Batch Uncached estimate USD: $0.000000 (2/2 priced)", output.getvalue())
+        self.assertIn("unknown (0/1 requests priced)", _cost_lines([{}])[0])
         reporter.close()
 
     def test_heartbeat_reports_waiting_for_shared_request_gate(self):

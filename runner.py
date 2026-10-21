@@ -20,6 +20,7 @@ from uuid import uuid4
 
 from cases import CASE_GENERATOR_VERSION, Case, generate_cases
 from costs import (
+    attempt_costs_from_events,
     decimal_text,
     estimate_uncached_cost_usd,
     extract_provider_cost_usd,
@@ -815,7 +816,7 @@ def _record_response(
                 model_info.completion_rate_usd_per_million,
             )
             gen_data = generation.get("data") if isinstance(generation.get("data"), Mapping) else {}
-            append_event(
+            cost_update = append_event(
                 ledger_path,
                 {
                     "event_type": "attempt_cost_update",
@@ -834,6 +835,11 @@ def _record_response(
                     ),
                 },
             )
+            # The progress callback receives the final persisted values, not
+            # the pre-enrichment amounts from the first response event.
+            for field in ("provider_reported_usd", "normalized_uncached_usd", "usage"):
+                if cost_update.get(field) is not None:
+                    response_event[field] = cost_update[field]
         except Exception as exc:  # Metadata lookup must never retry a paid completion.
             append_event(
                 ledger_path,
@@ -877,6 +883,7 @@ def _execute_run(
                 "completed_cases": len(terminal_cases),
                 "correct": progress_counts["correct"],
                 "incorrect": progress_counts["incorrect"],
+                "cost_attempts": attempt_costs_from_events(events),
             }
         )
     if state["finished"]:
@@ -990,6 +997,7 @@ def _execute_run(
                         on_progress(
                             {
                                 "event": "attempt_started",
+                                "attempt_id": attempt_id,
                                 "model_id": config.model_id,
                                 "reasoning_effort": config.reasoning_effort,
                                 "case_id": case.case_id,
@@ -1019,6 +1027,7 @@ def _execute_run(
                         on_progress(
                             {
                                 "event": "attempt_cancelled_before_dispatch",
+                                "attempt_id": attempt_id,
                                 "model_id": config.model_id,
                                 "reasoning_effort": config.reasoning_effort,
                                 "case_id": case.case_id,
@@ -1107,6 +1116,9 @@ def _execute_run(
                         on_progress(
                             {
                                 "event": "attempt_failed",
+                                "attempt_id": attempt_id,
+                                "provider_reported_usd": decimal_text(error_provider_cost),
+                                "normalized_uncached_usd": decimal_text(error_normalized_cost),
                                 "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                                 "case_id": case.case_id,
                                 "attempt_number": next_attempt,
@@ -1227,6 +1239,9 @@ def _execute_run(
                             "model_id": config.model_id, "reasoning_effort": config.reasoning_effort,
                             "case_id": case.case_id,
                             "outcome": event["outcome"],
+                            "attempt_id": attempt_id,
+                            "provider_reported_usd": event.get("provider_reported_usd"),
+                            "normalized_uncached_usd": event.get("normalized_uncached_usd"),
                             "completion_tokens": event.get("usage", {}).get("completion_tokens") or 0,
                             "completed_cases": len(terminal_cases),
                             "total_cases": len(cases),

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 import shutil
 import sys
 import threading
 import time
-from typing import Any, TextIO
+from typing import Any, Iterable, Mapping, TextIO
+
+from costs import as_decimal, decimal_text
 
 ProgressKey = tuple[str, str | None]  # (fully qualified model ID, optional effort)
 
@@ -28,6 +31,28 @@ def _terminal_text(value: str, max_chars: int) -> str:
     return printable[: max_chars - 3] + "..."
 
 
+def _cost_lines(
+    attempts: Iterable[Mapping[str, Any]], *, prefix: str = ""
+) -> tuple[str, str]:
+    rows = list(attempts)
+    lines = []
+    for field, label in (
+        ("provider_reported_usd", "Provider-reported USD"),
+        ("normalized_uncached_usd", "Uncached estimate USD"),
+    ):
+        values = [value for row in rows if (value := as_decimal(row.get(field))) is not None]
+        known, total = len(values), len(rows)
+        if total == 0:
+            amount = "$0.000000 (no requests yet)"
+        elif known == 0:
+            amount = f"unknown (0/{total} requests priced)"
+        else:
+            partial = "partial " if known < total else ""
+            amount = f"{partial}${sum(values, Decimal('0')):.6f} ({known}/{total} priced)"
+        lines.append(f"{prefix}{label}: {amount}")
+    return lines[0], lines[1]
+
+
 @dataclass
 class _ModelProgress:
     total: int
@@ -39,6 +64,7 @@ class _ModelProgress:
     correct: int = 0
     incorrect: int = 0
     seen_case_ids: set[str] = field(default_factory=set)
+    cost_attempts: dict[str, dict[str, str | None]] = field(default_factory=dict)
     active_case: str | None = None
     active_attempt: int | None = None
     active_max_attempts: int | None = None
@@ -46,7 +72,7 @@ class _ModelProgress:
 
 
 class ProgressReporter:
-    """Render one stable two-line progress bar per model on a TTY.
+    """Render stable progress and persisted-cost rows per model on a TTY.
 
     Non-streaming responses expose token usage only when they finish. The shown
     token rate is observed completion tokens (reasoning included when reported)
@@ -188,7 +214,25 @@ class ProgressReporter:
                 self._models[key] = state
 
             event_type = event.get("event")
+            attempt_id = event.get("attempt_id")
+            if attempt_id and event_type == "attempt_cancelled_before_dispatch":
+                state.cost_attempts.pop(str(attempt_id), None)
+            elif attempt_id and event_type in {
+                "attempt_started", "attempt_failed", "case_finished", "attempt_cost_update"
+            }:
+                costs = state.cost_attempts.setdefault(
+                    str(attempt_id),
+                    {"provider_reported_usd": None, "normalized_uncached_usd": None},
+                )
+                for cost_field in costs:
+                    value = as_decimal(event.get(cost_field))
+                    if value is not None:
+                        costs[cost_field] = decimal_text(value)
             if event_type == "run_progress_init":
+                state.cost_attempts = {
+                    str(key): dict(value)
+                    for key, value in event.get("cost_attempts", {}).items()
+                }
                 state.total = int(event.get("total_cases", state.total))
                 state.initial_completed = int(event.get("completed_cases", 0))
                 state.completed = state.initial_completed
@@ -198,6 +242,10 @@ class ProgressReporter:
                 state.active_case = None
                 state.status = None
                 self._render_locked("run state loaded")
+                return
+
+            if event_type == "attempt_cost_update":
+                self._render_locked("cost updated")
                 return
 
             if event_type == "rate_limit_wait":
@@ -257,7 +305,7 @@ class ProgressReporter:
                 state.incorrect += 1
             self._render_locked(outcome)
 
-    def _model_lines(self, key: ProgressKey, state: _ModelProgress, width: int) -> tuple[str, str]:
+    def _model_lines(self, key: ProgressKey, state: _ModelProgress, width: int) -> tuple[str, ...]:
         model_id, effort = key
         end_time = state.finished_at if state.finished_at is not None else time.monotonic()
         elapsed = max(0.0, end_time - state.started_at)
@@ -289,7 +337,8 @@ class ProgressReporter:
         )
         if len(second_line) > width:
             second_line = second_line[:width]
-        return first_line, second_line
+        costs = _cost_lines(state.cost_attempts.values())
+        return first_line, second_line, *(_terminal_text(line, width) for line in costs)
 
     def _render_locked(self, status: str) -> None:
         total = self._batch_total if self._batch_total is not None else len(self._models)
@@ -304,6 +353,13 @@ class ProgressReporter:
         # A long cancellation/error notice must not wrap and shift the cursor
         # accounting used by the in-place TTY redraw.
         lines = [_terminal_text(header, width)]
+        lines.extend(
+            _terminal_text(line, width)
+            for line in _cost_lines(
+                (cost for state in self._models.values() for cost in state.cost_attempts.values()),
+                prefix="Batch ",
+            )
+        )
 
         if self._is_tty:
             active_models = [
@@ -311,21 +367,21 @@ class ProgressReporter:
                 for key, state in self._models.items()
                 if key not in self._finished_models
             ]
-            available_model_lines = max(0, terminal.lines - 2)
+            available_model_lines = max(0, terminal.lines - len(lines) - 1)
             requested_limit = (
                 self._active_model_limit
                 if self._active_model_limit is not None
                 else len(active_models)
             )
-            model_limit = min(requested_limit, available_model_lines // 2)
+            model_limit = min(requested_limit, available_model_lines // 4)
             hidden_count = 0
             if len(active_models) > model_limit:
-                model_limit = min(model_limit, max(0, (available_model_lines - 1) // 2))
+                model_limit = min(model_limit, max(0, (available_model_lines - 1) // 4))
                 hidden_count = len(active_models) - model_limit
             for key, state in active_models[:model_limit]:
                 lines.extend(self._model_lines(key, state, width))
             visible_count = min(len(active_models), model_limit)
-            lines.extend([""] * (2 * (model_limit - visible_count)))
+            lines.extend([""] * (4 * (model_limit - visible_count)))
             if hidden_count:
                 lines.append(_terminal_text(
                     f"{hidden_count} active model(s) not shown", width
