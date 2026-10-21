@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 from decimal import Decimal
+import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -17,6 +19,35 @@ def _percentage(count: int, denominator: int) -> str:
     if denominator <= 0:
         return f"{count}/0 (—)"
     return f"{count}/{denominator} ({count / denominator * 100:.1f}%)"
+
+
+def wilson_95_ci(successes: int, trials: int) -> tuple[float, float] | None:
+    """Approximate 95% Wilson item-level interval; not a population CI."""
+    if trials < 0 or successes < 0 or successes > trials:
+        raise ValueError("Wilson interval counts must satisfy 0 <= successes <= trials")
+    if trials == 0:
+        return None
+    z = 1.959963984540054
+    proportion = successes / trials
+    z2 = z * z
+    denominator = 1 + z2 / trials
+    center = (proportion + z2 / (2 * trials)) / denominator
+    margin = (
+        z
+        * math.sqrt(
+            proportion * (1 - proportion) / trials + z2 / (4 * trials * trials)
+        )
+        / denominator
+    )
+    return max(0.0, center - margin), min(1.0, center + margin)
+
+
+def _ci_cell(successes: int, trials: int) -> str:
+    interval = wilson_95_ci(successes, trials)
+    if interval is None:
+        return "—"
+    low, high = interval
+    return f"{low * 100:.1f}–{high * 100:.1f}%"
 
 
 def _sum_decimals(values: Iterable[Decimal]) -> Decimal:
@@ -252,9 +283,13 @@ def summarize_run(ledger_path: str | Path) -> dict[str, Any]:
         "model_id": model.get("model_id") or model.get("requested_id") or manifest.get("display_model", "unknown"),
         "reasoning_effort": model.get("reasoning_effort", "unknown"),
         "dataset_id": dataset.get("dataset_id"),
+        "dataset_sha256": dataset.get("sha256"),
+        "config_sha256": manifest.get("config_sha256"),
+        "extension": manifest.get("extension"),
         "prompt_version": manifest.get("prompt", {}).get("version"),
         "depths": list(dataset.get("depths", [])),
         "samples_per_class": dataset.get("samples_per_class"),
+        "samples_per_class_by_depth": dataset.get("samples_per_class_by_depth"),
         "scheduled": scheduled,
         "complete": complete,
         "counts": counts,
@@ -299,6 +334,19 @@ def _markdown_cell(value: Any) -> str:
 def _effort_label(summary: Mapping[str, Any]) -> str:
     effort = summary.get("reasoning_effort", "unknown")
     return _markdown_cell("omitted (provider default)" if effort is None else effort or "unknown")
+
+
+def _samples_label(summary: Mapping[str, Any]) -> str:
+    by_depth = summary.get("samples_by_depth") or summary.get("samples_per_class_by_depth") or {}
+    if by_depth:
+        return "stratified " + ", ".join(
+            f"{depth}d={count}+{count}"
+            for depth, count in sorted(by_depth.items(), key=lambda item: int(item[0]))
+        )
+    per_class = summary.get("samples_per_class")
+    if per_class is not None:
+        return f"{per_class} prime + {per_class} non-prime per digit"
+    return "unknown per-depth sample counts"
 
 
 def _route_label(summary: Mapping[str, Any]) -> str:
@@ -348,7 +396,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                 f"## Dataset `{dataset_id}`",
                 "",
                 f"Prompt: `{prompt_version}` · Digits: {', '.join(map(str, depths))} · "
-                f"Samples: {samples_per_class} prime + {samples_per_class} non-prime per digit · "
+                f"Samples: {_samples_label(group[0])} · "
                 f"Max attempts: {max_attempts} · Completion token cap: {max_tokens_label} · "
                 f"Timeout: {timeout}s · Retry delay: {retry_delay}s · Effort shown per model",
                 "",
@@ -369,8 +417,8 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                 [
                     "### Model results",
                     "",
-                    "| Rank | Model ID | Effort | Provider route | Run | Answered / scheduled | Correct | Incorrect | Incorrect reasons |",
-                    "|---:|---|---|---|---|---:|---:|---:|---|",
+                    "| Rank | Model ID | Effort | Provider route | Run | Answered / scheduled | Correct | Approx. 95% Wilson CI | Incorrect | Incorrect reasons |",
+                    "|---:|---|---|---|---|---:|---:|---:|---:|---|",
                 ]
             )
             for rank, run in enumerate(complete_runs, start=1):
@@ -378,13 +426,14 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                 total = run["scheduled"]
                 lines.append(
                     f"| {rank} | {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
-                    f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | "
+                    f"{_route_label(run)} | {_run_label(run)} | "
                     f"{counts['answered_cases']}/{total} | "
                     f"{_percentage(counts['correct'], total)} | "
+                    f"{_ci_cell(counts['correct'], total)} | "
                     f"{_percentage(counts['incorrect'], total)} | "
                     f"{_incorrect_breakdown(counts)} |"
                 )
-            lines.extend(["", "### Results by digit", "", "| Model ID | Effort | Run | Digits | Correct | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |", "|---|---|---|---:|---:|---:|---:|---:|---:|"])
+            lines.extend(["", "### Results by digit", "", "| Model ID | Effort | Run | Digits | Correct | Approx. 95% Wilson CI | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |", "|---|---|---|---:|---:|---:|---:|---:|---:|---:|"])
             for run in complete_runs:
                 for depth in run["depths"]:
                     cell = run["by_depth"][depth]
@@ -392,8 +441,9 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                     incorrect = cell["incorrect"]
                     lines.append(
                         f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
-                        f"{str(run.get('run_id') or '')[:8]} | {depth} | "
+                        f"{_run_label(run)} | {depth} | "
                         f"{_percentage(cell['correct'], scheduled)} | "
+                        f"{_ci_cell(cell['correct'], scheduled)} | "
                         f"{_percentage(incorrect, scheduled)} | "
                         f"{cell['truncated']} | "
                         f"{cell['primes_correct']}/{cell['primes_scheduled']} | "
@@ -411,7 +461,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
             for run in complete_runs:
                 lines.append(
                     f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
-                    f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | "
+                    f"{_route_label(run)} | {_run_label(run)} | "
                     f"{run['prompt_tokens']:,} / {run['completion_tokens']:,} "
                     f"({run['token_usage_known_attempts']}/{run['attempt_count']} attempts with token counts) | "
                     f"{run['provider_cost_cell']} | {run['normalized_cost_cell']} |"
@@ -430,7 +480,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
                 counts = run["counts"]
                 lines.append(
                     f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
-                    f"{_route_label(run)} | {str(run.get('run_id') or '')[:8]} | {run['scheduled']} | "
+                    f"{_route_label(run)} | {_run_label(run)} | {run['scheduled']} | "
                     f"{_percentage(counts['correct'], run['scheduled'])} | "
                     f"{_percentage(counts['incorrect'], run['scheduled'])} | "
                     f"{counts['attempted_cases']} | {counts['answered_cases']} | "
@@ -443,6 +493,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
         [
             "Incorrect includes wrong labels, invalid responses, and retry-exhausted no-response items. "
             "Invalid and no-response counts are shown separately as reasons; truncated is an invalid-response sub-count. Percentages use all scheduled cases. "
+            "Approximate 95% Wilson intervals are item-level summaries for this fixed, balanced test set, not population or model-superiority intervals; incomplete runs have no interval. "
             "Costs cover all request attempts; partial/unknown coverage is labeled, never treated as $0.",
             "",
         ]
@@ -450,8 +501,183 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _merge_extension_summary(
+    parent: Mapping[str, Any], child: Mapping[str, Any]
+) -> dict[str, Any]:
+    extension = child.get("extension") or {}
+    summaries = (parent, child)
+    attempts = dict(parent.get("attempts", {}))
+    for attempt_id, attempt in child.get("attempts", {}).items():
+        if attempt_id in attempts:
+            raise ValueError(f"duplicate attempt ID across parent/extension: {attempt_id}")
+        attempts[attempt_id] = attempt
+
+    counts = {
+        key: int(parent["counts"].get(key, 0)) + int(child["counts"].get(key, 0))
+        for key in set(parent["counts"]) | set(child["counts"])
+    }
+    by_depth: dict[int, dict[str, int]] = {}
+    for summary in summaries:
+        for raw_depth, values in summary["by_depth"].items():
+            cell = by_depth.setdefault(int(raw_depth), {})
+            for key, value in values.items():
+                cell[key] = cell.get(key, 0) + int(value)
+
+    attempt_count = sum(int(summary["attempt_count"]) for summary in summaries)
+    provider_total = sum(
+        (as_decimal(summary.get("provider_cost_total")) or Decimal("0"))
+        for summary in summaries
+    )
+    normalized_total = sum(
+        (as_decimal(summary.get("normalized_cost_total")) or Decimal("0"))
+        for summary in summaries
+    )
+    provider_known = sum(int(summary["provider_cost_known_attempts"]) for summary in summaries)
+    normalized_known = sum(int(summary["normalized_cost_known_attempts"]) for summary in summaries)
+    token_known = sum(int(summary["token_usage_known_attempts"]) for summary in summaries)
+    target_depths = list(extension.get("target_depths", []))
+    raw_target_samples = extension.get("target_samples_per_class")
+    target_samples = int(raw_target_samples) if raw_target_samples is not None else None
+    target_samples_by_depth = {
+        int(depth): int(count)
+        for depth, count in extension.get("target_samples_by_depth", {}).items()
+    }
+    parent_run_id = str(parent.get("run_id"))
+    batch_id = str(extension.get("extension_batch_id", "extension"))
+    merged = dict(parent)
+    merged.update(
+        {
+            "run_id": f"{parent_run_id[:8]}+{batch_id[:8]}",
+            "parent_run_id": parent_run_id,
+            "extension_child_run_ids": [str(child.get("run_id"))],
+            "extension_batch_id": batch_id,
+            "extension_complete": True,
+            "dataset_id": extension.get("target_dataset_id"),
+            "dataset_sha256": extension.get("target_dataset_sha256"),
+            "depths": target_depths,
+            "samples_per_class": target_samples,
+            "samples_by_depth": target_samples_by_depth,
+            "scheduled": int(parent["scheduled"]) + int(child["scheduled"]),
+            "complete": True,
+            "counts": counts,
+            "by_depth": by_depth,
+            "attempt_count": attempt_count,
+            "attempts": attempts,
+            "prompt_tokens": sum(int(summary["prompt_tokens"]) for summary in summaries),
+            "completion_tokens": sum(int(summary["completion_tokens"]) for summary in summaries),
+            "token_usage_known_attempts": token_known,
+            "provider_cost_total": provider_total,
+            "provider_cost_known_attempts": provider_known,
+            "normalized_cost_total": normalized_total,
+            "normalized_cost_known_attempts": normalized_known,
+            "provider_cost_cell": _cost_cell(provider_total, provider_known, attempt_count),
+            "normalized_cost_cell": _cost_cell(normalized_total, normalized_known, attempt_count),
+            "provider_routes": sorted(
+                set(parent.get("provider_routes", [])) | set(child.get("provider_routes", []))
+            ),
+            "outcomes": [*parent["outcomes"], *child["outcomes"]],
+        }
+    )
+    merged_config = dict(parent.get("config", {}))
+    merged_config.update({"depths": target_depths, "samples_per_class": target_samples})
+    merged["config"] = merged_config
+    return merged
+
+
+def _run_label(summary: Mapping[str, Any]) -> str:
+    if summary.get("extension_batch_id") and summary.get("parent_run_id"):
+        return f"{str(summary['parent_run_id'])[:8]}+{str(summary['extension_batch_id'])[:8]}"
+    return str(summary.get("run_id") or "")[:8]
+
+
+def _load_extension_parent(child: Mapping[str, Any]) -> dict[str, Any]:
+    extension = child.get("extension")
+    if not isinstance(extension, Mapping):
+        raise ValueError("extension child manifest lacks parent provenance")
+    child_ledger = Path(str(child["ledger_path"]))
+    parent_ledger = child_ledger.with_name(str(extension.get("parent_ledger_file", "")))
+    if not parent_ledger.is_file():
+        raise FileNotFoundError(
+            f"extension parent ledger is missing for run {child.get('run_id')}: {parent_ledger}"
+        )
+    if hashlib.sha256(parent_ledger.read_bytes()).hexdigest() != extension.get("parent_ledger_sha256"):
+        raise ValueError(f"extension parent ledger hash mismatch: {parent_ledger}")
+    parent_manifest_path = _manifest_path(parent_ledger)
+    if not parent_manifest_path.is_file():
+        raise FileNotFoundError(f"extension parent manifest is missing: {parent_manifest_path}")
+    if hashlib.sha256(parent_manifest_path.read_bytes()).hexdigest() != extension.get("parent_manifest_sha256"):
+        raise ValueError(f"extension parent manifest hash mismatch: {parent_manifest_path}")
+    parent = summarize_run(parent_ledger)
+    if parent.get("run_id") != extension.get("parent_run_id"):
+        raise ValueError("extension parent run ID mismatch")
+    if parent.get("config", {}).get("config_sha256") not in (None, extension.get("parent_config_sha256")):
+        raise ValueError("extension parent config hash mismatch")
+    return parent
+
+
 def load_summaries(paths: Iterable[str | Path]) -> list[dict[str, Any]]:
-    return [summarize_run(path) for path in paths]
+    summaries_by_path: dict[Path, dict[str, Any]] = {}
+    pending = [Path(path).resolve() for path in paths]
+    while pending:
+        path = pending.pop()
+        if path in summaries_by_path:
+            continue
+        summary = summarize_run(path)
+        summaries_by_path[path] = summary
+        extension = summary.get("extension")
+        if isinstance(extension, Mapping):
+            parent_summary = _load_extension_parent(summary)
+            parent_path = Path(parent_summary["ledger_path"]).resolve()
+            if parent_path not in summaries_by_path:
+                pending.append(parent_path)
+
+    summaries = list(summaries_by_path.values())
+    by_run_id = {str(summary.get("run_id")): summary for summary in summaries}
+    extensions: dict[tuple[str, str], dict[str, Any]] = {}
+    for child in summaries:
+        metadata = child.get("extension")
+        if not isinstance(metadata, Mapping):
+            continue
+        key = (str(metadata.get("extension_batch_id")), str(metadata.get("parent_run_id")))
+        if key in extensions:
+            raise ValueError(f"multiple extension children found for parent {key[1]}")
+        extensions[key] = child
+
+    parent_counts: dict[str, int] = {}
+    for _batch_id, parent_id in extensions:
+        parent_counts[parent_id] = parent_counts.get(parent_id, 0) + 1
+    if any(count > 1 for count in parent_counts.values()):
+        raise ValueError("a base run has multiple extension children; merge one explicit child at a time")
+
+    suppressed_ids: set[str] = set()
+    extension_rows: list[dict[str, Any]] = []
+    for (batch_id, parent_id), child in extensions.items():
+        parent = by_run_id.get(parent_id)
+        if parent is None:
+            raise ValueError(f"extension parent run is missing: {parent_id}")
+        if not parent["complete"]:
+            raise ValueError(f"extension parent run is incomplete: {parent_id}")
+        metadata = child["extension"]
+        if metadata.get("parent_run_id") != parent_id:
+            raise ValueError(f"extension parent mismatch for batch {batch_id}")
+        if child["complete"]:
+            extension_rows.append(_merge_extension_summary(parent, child))
+            suppressed_ids.add(parent_id)
+        else:
+            provisional = dict(child)
+            provisional["complete"] = False
+            provisional["extension_complete"] = False
+            provisional["extension_progress"] = "supplemental child incomplete"
+            extension_rows.append(provisional)
+        suppressed_ids.add(str(child["run_id"]))
+
+    output = [
+        summary
+        for summary in summaries
+        if str(summary.get("run_id")) not in suppressed_ids
+    ]
+    output.extend(extension_rows)
+    return output
 
 
 def discover_ledgers(results_dir: str | Path) -> list[Path]:

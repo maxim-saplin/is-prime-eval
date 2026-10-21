@@ -42,9 +42,13 @@ class PromptTests(unittest.TestCase):
             make_prompt(1_234_567),
             "Is 1234567 prime? Reply with only PRIME or COMPOSITE.",
         )
+        self.assertEqual(
+            make_prompt(10_000_000_000),
+            "Is 10000000000 prime? Reply with only PRIME or COMPOSITE.",
+        )
 
     def test_make_prompt_rejects_numbers_outside_supported_domain(self):
-        for number in (0, -2, 10**10):
+        for number in (0, -2, 10**15):
             with self.subTest(number=number):
                 with self.assertRaises(ValueError):
                     make_prompt(number)

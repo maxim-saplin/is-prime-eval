@@ -11,13 +11,15 @@ from typing import Any, Callable, Sequence
 
 from openrouter import ModelInfo, OpenRouterClient
 from request_gate import AccountRequestGate
-from runner import RunConfig, prepare_case_dataset, run_new
+from runner import PreparedDataset, RunConfig, prepare_case_dataset, resume_run, run_new
 
 
 @dataclass(frozen=True)
 class ModelRunSpec:
     config: RunConfig
     model_info: ModelInfo
+    extension_metadata: dict[str, Any] | None = None
+    resume_ledger_path: Path | None = None
 
 
 ClientFactory = Callable[[float], OpenRouterClient]
@@ -30,6 +32,8 @@ def run_many(
     results_dir: str | Path,
     parallelism: int,
     on_progress: Any = None,
+    prepared_dataset: PreparedDataset | None = None,
+    shared_request_gate: AccountRequestGate | None = None,
 ) -> list[dict[str, Any]]:
     """Run model specs concurrently, each with its own sequential request loop.
 
@@ -49,6 +53,7 @@ def run_many(
     shared_settings = (
         first_config.depths,
         first_config.samples_per_class,
+        first_config.samples_per_class_by_depth,
         first_config.seed,
         first_config.max_attempts,
         first_config.retry_delay_seconds,
@@ -60,6 +65,7 @@ def run_many(
         (
             spec.config.depths,
             spec.config.samples_per_class,
+            spec.config.samples_per_class_by_depth,
             spec.config.seed,
             spec.config.max_attempts,
             spec.config.retry_delay_seconds,
@@ -75,13 +81,15 @@ def run_many(
     if len(set(identities)) != len(identities):
         raise ValueError("parallel model_id/reasoning_effort identities must be unique")
     worker_count = min(parallelism, len(specs))
-    request_gate = (
+    request_gate = shared_request_gate or (
         AccountRequestGate(first_config.min_request_interval_seconds)
         if first_config.min_request_interval_seconds > 0
         else None
     )
 
-    prepared_dataset = prepare_case_dataset(results_dir=results_dir, config=first_config)
+    prepared_dataset = prepared_dataset or prepare_case_dataset(
+        results_dir=results_dir, config=first_config
+    )
     if on_progress is not None:
         if hasattr(on_progress, "set_active_model_limit"):
             on_progress.set_active_model_limit(worker_count)
@@ -93,19 +101,29 @@ def run_many(
     def execute(index: int, spec: ModelRunSpec) -> tuple[int, dict[str, Any]]:
         config = spec.config
         if on_progress is not None and hasattr(on_progress, "register_model"):
-            total = len(config.depths) * config.samples_per_class * 2
+            total = config.scheduled_case_count
             on_progress.register_model(config.model_id, config.reasoning_effort, total)
         client = client_factory(config.timeout_seconds)
-        result = run_new(
-            client=client,
-            config=config,
-            model_info=spec.model_info,
-            results_dir=results_dir,
-            on_progress=on_progress,
-            prepared_dataset=prepared_dataset,
-            cancel_event=cancellation,
-            request_gate=request_gate,
-        )
+        if spec.resume_ledger_path is not None:
+            result = resume_run(
+                client=client,
+                ledger_path=spec.resume_ledger_path,
+                on_progress=on_progress,
+                cancel_event=cancellation,
+                request_gate=request_gate,
+            )
+        else:
+            result = run_new(
+                client=client,
+                config=config,
+                model_info=spec.model_info,
+                results_dir=results_dir,
+                on_progress=on_progress,
+                prepared_dataset=prepared_dataset,
+                cancel_event=cancellation,
+                request_gate=request_gate,
+                extension_metadata=spec.extension_metadata,
+            )
         return index, {"spec": spec, "result": result, "error": None}
 
     def store(index: int, row: dict[str, Any]) -> None:

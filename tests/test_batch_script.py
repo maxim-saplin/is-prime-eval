@@ -47,6 +47,9 @@ class BatchScriptTests(unittest.TestCase):
         script_path = PROJECT_ROOT / "scripts" / "run_14_pair_sweep.sh"
         text = script_path.read_text(encoding="utf-8")
         self.assertIn('mode="${1:---dry-run}"', text)
+        self.assertIn("--extend-through 15", text)
+        self.assertIn("--top-up-existing-per-class 5", text)
+        self.assertIn("--new-depths-per-class 15", text)
         self.assertIn("--parallelism 3", text)
         self.assertIn("--max-retries 5", text)
         self.assertIn("--retry-delay 1", text)
@@ -54,7 +57,7 @@ class BatchScriptTests(unittest.TestCase):
         self.assertIn("--requests-per-minute 15", text)
         self.assertIn("flock -n 9", text)
         self.assertIn("realpath -m", text)
-        self.assertIn('results_dir="${EVAL_RESULTS_DIR:-$project_root/results/uncapped-14-pair-sweep-clean}"', text)
+        self.assertIn('results_dir="${EVAL_RESULTS_DIR:-$project_root/results}"', text)
         self.assertNotIn("--max-completion-tokens", text)
         self.assertIn('lock_file="$project_root/.run-locks/openrouter-live.lock"', text)
 

@@ -1,0 +1,40 @@
+Preflight: exact 14-pair extension script, dry-run only (catalog lookup; zero chat completions).
+Reusing pre-existing frozen plan created 2026-10-21T08:28:15.201334Z; it was not sampled during this preflight.
+Frozen seed: 8201197980031015919 (system_random)
+Supplement dataset SHA-256: 38a18b8509bd92023bbfc5b3efdb0e2682703008fdfde8738f9e95afccfc387a
+Cumulative dataset SHA-256: 42d9679127fe9803e11f17356a876bfd3463583986daae4004135c133659b5fd
+
+Mode: --dry-run
+Results directory: /home/user/src/is-prime-eval/results
+Extension: top-ups plus depths through 15
+Timeout: 600s urllib socket inactivity
+DEPTH EXTENSION DRY RUN — no chat-completion inference will be sent
+Extension batch: 7c21f4951232d813f132
+Parent runs: 14 complete base runs
+Parent depths: 4, 5, 6, 7, 8, 9, 10
+Target depths: 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+Added cases per model: 220; cumulative cases per model: 360
+Supplement sampling seed: 8201197980031015919 (system_random)
+Supplement per depth (primes + composites): 4d=5+5, 5d=5+5, 6d=5+5, 7d=5+5, 8d=5+5, 9d=5+5, 10d=5+5, 11d=15+15, 12d=15+15, 13d=15+15, 14d=15+15, 15d=15+15
+Cumulative dataset SHA-256: 42d9679127fe9803e11f17356a876bfd3463583986daae4004135c133659b5fd
+Completion token cap: none; output-only cost bound is unbounded
+Maximum completion attempts per case: 6 (5 retries); backoff base: 1s
+Timeout: 600.0s socket inactivity · Parallelism: 3 · Rate gate: 15.00 requests/min
+anthropic/claude-haiku-5.5 / high: input=$0.1000000/1M output=$0.5000000/1M
+anthropic/claude-haiku-5.5 / low: input=$0.1000000/1M output=$0.5000000/1M
+anthropic/claude-haiku-5.5 / medium: input=$0.1000000/1M output=$0.5000000/1M
+anthropic/claude-haiku-5.5 / xhigh: input=$0.1000000/1M output=$0.5000000/1M
+deepseek/deepseek-v4.1-flash-1017 / high: input=$0.3000000/1M output=$1.2000000/1M
+deepseek/deepseek-v4.1-flash-1017 / low: input=$0.3000000/1M output=$1.2000000/1M
+deepseek/deepseek-v4.1-flash-1017 / medium: input=$0.3000000/1M output=$1.2000000/1M
+openai/gpt-4-turbo / omitted: input=$10.00000/1M output=$30.00000/1M
+openai/gpt-6-luna / high: input=$0.1000000/1M output=$0.5000000/1M
+openai/gpt-6-luna / low: input=$0.1000000/1M output=$0.5000000/1M
+openai/gpt-6-luna / medium: input=$0.1000000/1M output=$0.5000000/1M
+openai/gpt-6-luna / xhigh: input=$0.1000000/1M output=$0.5000000/1M
+openai/gpt-6.1-sol / low: input=$2.000000/1M output=$10.00000/1M
+openai/gpt-6.1-sol / medium: input=$2.000000/1M output=$10.00000/1M
+
+Command: bash scripts/run_14_pair_sweep.sh --dry-run (EVAL_SEED and EVAL_RESULTS_DIR unset)
+Preflight command exit status: 0
+No chat-completion requests were sent.

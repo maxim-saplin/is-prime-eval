@@ -4,7 +4,7 @@ A small prompt-only evaluation of whether language models can classify integers 
 
 ## Test set
 
-`depth` means the number of decimal digits. The default run tests depths 4 through 10 inclusive, with **10 primes and 10 non-primes at each depth**: 20 questions per depth and **140 questions per model**, before retries. Cases are generated from a recorded seed, labeled with an exact deterministic primality check, and saved with a content hash so models can be compared on exactly the same questions.
+`depth` means the number of decimal digits. A fresh default run tests depths 4 through 15 inclusive, with **15 primes and 15 non-primes at each depth**: 30 questions per depth and **360 questions per model**, before retries. Cases are generated from a recorded seed (system-random by default; use `--seed` for reproducibility), labeled with an exact deterministic primality check, and saved with a content hash so models can be compared on exactly the same questions.
 
 Each model receives one prompt per case: “Is N prime? Reply with only PRIME or COMPOSITE.” Correct and incorrect percentages use all scheduled questions. Wrong labels, invalid answers, and retry-exhausted requests with no response are counted as not correct, with their reasons shown separately. An interrupted run with pending cases is provisional and is not ranked.
 
@@ -62,7 +62,7 @@ Model ID and reasoning effort are separate explicit fields; every model requires
 
 `omit` is not sent to the provider: it omits reasoning controls and uses the provider's default behavior (which does not necessarily disable default reasoning). The provider level `none` is a distinct literal effort and is sent unchanged. Supported values depend on the model/provider; unsupported settings are not silently substituted. Omission is saved as JSON `null` and preserved on resume; no effort is inferred or silently selected.
 
-Other defaults are depths `4-10`, 10 examples of each class per depth, seed `2026`, and **five retries after the initial attempt** (six total attempts per case). Transient/API retries use an exponential backoff with a 1-second base and bounded ±20% jitter; invalid or truncated answers are recorded and are not retried for a better answer. Set `--max-retries N` to change retries after the initial request. By default, requests send neither `max_completion_tokens` nor `max_tokens`; use `--max-completion-tokens N` only as an explicit opt-in cap. There is no adapter fallback between these parameter names. Provider/model-side output limits may still truncate responses; dry runs report the output-only cost bound as unbounded when no explicit cap is set.
+Other defaults are depths `4-15`, 15 examples of each class per depth, a system-random seed recorded in the manifest, and **five retries after the initial attempt** (six total attempts per case). Transient/API retries use an exponential backoff with a 1-second base and bounded ±20% jitter; invalid or truncated answers are recorded and are not retried for a better answer. Set `--max-retries N` to change retries after the initial request. By default, requests send neither `max_completion_tokens` nor `max_tokens`; use `--max-completion-tokens N` only as an explicit opt-in cap. There is no adapter fallback between these parameter names. Provider/model-side output limits may still truncate responses; dry runs report the output-only cost bound as unbounded when no explicit cap is set.
 
 ## Parallel model runs
 
@@ -91,13 +91,13 @@ The CLI applies a **shared account-request gate** across all workers and retries
 
 ## Benchmark and request-policy audit
 
-- The default test set is balanced by construction (10 prime + 10 non-prime per digit depth); it is not a natural-prevalence sample. `--seed` controls case generation only; it is not sent as a model sampling seed.
+- The default test set is balanced by construction (15 prime + 15 non-prime per digit depth); it is not a natural-prevalence sample. `--seed` controls case generation only; it is not sent as a model sampling seed.
 - No temperature or `top_p` is sent. OpenRouter provider routing is not pinned, and the requested reasoning effort is not independently verified as honored by the eventual route. `reasoning-effort omit` sends no reasoning control and uses provider default behavior; it does not mean reasoning is disabled.
 - The parser accepts only the bare `PRIME`/`COMPOSITE` labels. Explanations, refusals, and truncated outputs are invalid; they are recorded, not retried. A completed score is accuracy within this exact prompt/output budget, not an estimate of unrestricted primality competence.
 - Without an explicit token cap, provider/model-side limits can still truncate outputs and there is no finite output-only cost bound. Actual spend is read from per-attempt usage when available; timeouts/errors can leave spend unknown. Retries may incur additional cost.
 - The CLI timeout is an urllib socket inactivity timeout, not a strict total wall-clock deadline. A request that continues delivering data may exceed the configured number of seconds; cancellation stops new dispatches but allows in-flight requests to finish or time out.
 
-The checked-in 14-pair script defaults to a no-completion preflight and requires `--live` explicitly to send requests. It uses the user-selected 600-second urllib socket timeout, writes to repository-local `results/uncapped-14-pair-sweep-clean`, takes a stable exclusive host lock for the whole live batch, rejects aliases of the old partial archive and non-empty output directories, and sends no completion-token cap. The lock serializes this script's batches; keep all other processes/clients using the same API key idle. Results are gitignored during an active run to avoid accidental snapshots; after validation, intentionally force-add the selected ledgers/manifests/dataset/report to the private repository.
+The checked-in 14-pair extension script defaults to a no-completion preflight and requires `--live` explicitly to send requests. It selects the existing parents in repository-local `results/` (overridable with `EVAL_RESULTS_DIR`), uses the user-selected 600-second urllib socket inactivity timeout, takes a stable exclusive host lock for the whole live batch, rejects aliases of the old partial archive, and sends no completion-token cap. The lock serializes this script's batches; keep all other processes/clients using the same API key idle. Results are gitignored during an active run to avoid accidental snapshots.
 
 ```sh
 bash scripts/run_14_pair_sweep.sh --dry-run
@@ -116,14 +116,14 @@ To resume an interrupted run, pass its JSONL event ledger. The saved manifest su
 
 ## Leaderboard and run artifacts
 
-Print a leaderboard for the uncapped sweep's ledgers or a specific run (the report scan is not recursive):
+Print a leaderboard for the saved ledgers or a specific run (the report scan is not recursive):
 
 ```sh
-.venv/bin/python report.py --results-dir results/uncapped-14-pair-sweep-clean --output leaderboard.md
-.venv/bin/python report.py results/uncapped-14-pair-sweep-clean/<run-ledger>.jsonl --output leaderboard.md
+.venv/bin/python report.py --results-dir results --output leaderboard.md
+.venv/bin/python report.py results/<run-ledger>.jsonl --output leaderboard.md
 ```
 
-The report has separate **Model ID** and **Reasoning effort** columns, a provider-route column, and a short run ID. Different efforts of the same model and repeated runs are distinct rows without encoding settings into model names. It shows Correct/Incorrect counts and percentages, results by digit (including prime and non-prime questions correctly identified), tokens, and two per-run costs:
+The report has separate **Model ID** and **Reasoning effort** columns, a provider-route column, and a short run ID. Different efforts of the same model and repeated runs are distinct rows without encoding settings into model names. It shows Correct/Incorrect counts and percentages, approximate 95% Wilson item-level intervals overall and by digit, results by digit (including prime and non-prime questions correctly identified), tokens, and two per-run costs. Intervals are summaries of this fixed test set, not population or model-superiority intervals; incomplete runs have no interval:
 
 - **Provider-reported cost:** the amount OpenRouter reports.
 - **Estimated cost without cache discounts:** reported token counts priced at ordinary uncached rates, as if every prompt token were uncached.
@@ -134,18 +134,30 @@ Missing/partial cost coverage is labeled, never shown as `$0`. Both totals inclu
 .venv/bin/python enrich_generations.py results/<run-ledger>.jsonl --timeout "$TIMEOUT_SECONDS"
 ```
 
-## Current result status
+## Current result status and depth extension
 
-There are currently **no valid results and no retained prior datasets** in the active repository results tree. Earlier comparisons that explicitly used a 512-token completion cap, their datasets, and generated leaderboards have been moved to recoverable Trash because truncation dominated their scores; see `ARTIFACT_CLEANUP_RECEIPT.md` for hashes and recovery mappings. The previously deferred `/data/eval-runs/is-prim-eval/2026-10-19/results` directory was also safely moved to Trash after inspection found no open handles in that copied directory; LibreOffice was not closed or killed. The checked-in `leaderboard.md` is only a no-results placeholder.
+The repository contains 14 complete uncapped parent runs at depths 4–10 (140 cases each) in `results/`. An extension adds one frozen shared supplement of 220 disjoint cases per parent: 5 prime and 5 non-prime top-ups at existing depths, and 15 of each at new depths through 15. Each parent remains immutable and gets one resumable child ledger. A randomly chosen supplement seed and its dataset are persisted so rerunning the same extension command reuses the same cases. After a child completes, `report.py` combines parent and child once; incomplete children remain provisional and their costs stay visible.
 
-The user personally launches the fresh uncapped baseline (this sends paid API requests):
+For one explicitly selected parent, the generic CLI is:
 
 ```sh
-cd /home/user/src/is-prime-eval
+.venv/bin/python run.py \
+  --parent-ledger results/<parent-ledger>.jsonl \
+  --extend-through 15 --top-up-existing-per-class 5 --new-depths-per-class 15 \
+  --parallelism 3 --max-retries 5 --retry-delay 1 \
+  --requests-per-minute 15 --timeout 600 --results-dir results --dry-run
+```
+
+Repeat `--parent-ledger` for multiple selected parents, or select exact Model ID/Effort pairs. Rerun the same command to resume child ledgers and reuse the saved supplement; use `--seed N` only when explicitly choosing a reproducible extension seed.
+
+The user controls the extension preflight and live action. The checked-in 14-pair script defaults to a no-completion preflight; `--live` is required to dispatch inference:
+
+```sh
+bash scripts/run_14_pair_sweep.sh --dry-run
 bash scripts/run_14_pair_sweep.sh --live
 ```
 
-The script uses 14 Model ID/Effort pairs including GPT-4 Turbo with `omit`, timeout `600`, no explicit token cap, 3 parallel model runs, 5 retries with a 1-second base delay, and the shared 15-RPM gate. It generates a fresh deterministic dataset from the default seed (`2026`) at launch, shared by all 14 runs, under the new repo-local output directory `results/uncapped-14-pair-sweep-clean`. Deterministic regeneration may reproduce the former dataset's content hash; no old dataset file is reused. Keep other clients using the same API key idle. No preflight, catalog lookup, or live evaluation was performed as part of the offline cleanup.
+It selects 14 Model ID/Effort pairs, including GPT-4 Turbo with `omit`, with timeout `600`, no explicit token cap, 3 parallel model runs, 5 retries, a 1-second backoff base, and a shared 15-RPM gate. The catalog-only preflight (zero completion requests) is recorded in `preflight/14-pair-depth15-extension-20261021.txt`; it reuses the previously frozen random-seed supplement. No live inference has been launched by the assistant.
 
 ## Offline tests
 

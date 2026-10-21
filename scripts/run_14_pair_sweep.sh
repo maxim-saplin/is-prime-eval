@@ -11,9 +11,13 @@ esac
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 python="$project_root/.venv/bin/python"
-results_dir="${EVAL_RESULTS_DIR:-$project_root/results/uncapped-14-pair-sweep-clean}"
+results_dir="${EVAL_RESULTS_DIR:-$project_root/results}"
 old_partial_dir="/data/eval-runs/is-prim-eval/2026-10-19/13-pair-sweep"
 lock_file="$project_root/.run-locks/openrouter-live.lock"
+seed_args=()
+if [[ -n "${EVAL_SEED:-}" ]]; then
+  seed_args=(--seed "$EVAL_SEED")
+fi
 
 if [[ ! -x "$python" ]]; then
   echo "Missing virtualenv Python: $python" >&2
@@ -24,9 +28,7 @@ if ! command -v realpath >/dev/null || ! command -v flock >/dev/null; then
   exit 2
 fi
 
-# Hold one stable lock across the entire live batch, independent of the output
-# directory. This prevents two copies of this script from exceeding the shared
-# account gate by running separate batches simultaneously.
+# Hold one stable lock across the whole live extension, independent of results.
 if [[ "$mode" == "--live" ]]; then
   mkdir -p "$(dirname "$lock_file")"
   exec 9>"$lock_file"
@@ -46,18 +48,12 @@ case "$canonical_results_dir" in
     ;;
 esac
 case "$canonical_results_dir" in
-  "$canonical_project_results"/*) ;;
-  *) echo "Results must be stored under the repository's results/ directory: $canonical_project_results" >&2; exit 2 ;;
+  "$canonical_project_results"|"$canonical_project_results"/*) ;;
+  *) echo "Parent and extension runs must be stored under the repository's results/ directory: $canonical_project_results" >&2; exit 2 ;;
 esac
 results_dir="$canonical_results_dir"
 
-if [[ "$mode" == "--live" && -d "$results_dir" ]] && \
-   find "$results_dir" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
-  echo "Refusing to reuse a non-empty results directory: $results_dir" >&2
-  exit 2
-fi
-
-printf 'Mode: %s\nResults directory: %s\nTimeout: 600s urllib socket inactivity\n' "$mode" "$results_dir"
+printf 'Mode: %s\nResults directory: %s\nExtension: top-ups plus depths through 15\nTimeout: 600s urllib socket inactivity\n' "$mode" "$results_dir"
 command=(
   "$python" "$project_root/run.py"
   --model-id openai/gpt-6-luna --reasoning-effort low
@@ -74,16 +70,20 @@ command=(
   --model-id openai/gpt-6.1-sol --reasoning-effort low
   --model-id openai/gpt-6.1-sol --reasoning-effort medium
   --model-id openai/gpt-4-turbo --reasoning-effort omit
+  --extend-through 15
+  --top-up-existing-per-class 5
+  --new-depths-per-class 15
   --parallelism 3
   --max-retries 5
   --retry-delay 1
   --timeout 600
   --requests-per-minute 15
   --results-dir "$results_dir"
+  "${seed_args[@]}"
   "${mode_args[@]}"
 )
 if [[ "$mode" == "--live" ]]; then
-  "${command[@]}"  # Parent shell retains fd 9/lock until the run exits.
+  "${command[@]}"  # Parent shell retains fd 9/lock until all children finish.
 else
   exec "${command[@]}"
 fi

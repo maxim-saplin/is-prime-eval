@@ -4,24 +4,32 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import math
 from pathlib import Path
+import secrets
 import signal
 import sys
 from typing import Sequence
 
+from extensions import (
+    load_extension_parents,
+    locked_parents,
+    prepare_extension_plan,
+    select_parent_ledgers,
+)
 from model_specs import ModelSpec, parse_model_specs
 from multi_run import ModelRunSpec, run_many
 from openrouter import OpenRouterClient, OpenRouterError
 from progress import ProgressReporter
+from request_gate import AccountRequestGate
 from runner import (
     DEFAULT_DEPTHS,
     DEFAULT_MAX_RETRIES,
     DEFAULT_MIN_REQUEST_INTERVAL_SECONDS,
     DEFAULT_RETRY_DELAY_SECONDS,
     DEFAULT_SAMPLES_PER_CLASS,
-    DEFAULT_SEED,
     EvaluationInterrupted,
     RunConfig,
     create_dry_run_plan,
@@ -49,8 +57,8 @@ def parse_depths(value: str) -> tuple[int, ...]:
         raise argparse.ArgumentTypeError(
             "depths must be an inclusive range like 4-10 or a list like 4,6,8"
         ) from exc
-    if not depths or any(depth < 1 or depth > 10 for depth in depths):
-        raise argparse.ArgumentTypeError("depths must be between 1 and 10")
+    if not depths or any(depth < 1 or depth > 15 for depth in depths):
+        raise argparse.ArgumentTypeError("depths must be between 1 and 15")
     if len(set(depths)) != len(depths):
         raise argparse.ArgumentTypeError("depths must not contain duplicates")
     return depths
@@ -69,41 +77,36 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reasoning-effort",
         action="append",
-        help="Explicit provider effort paired per --model-id; use 'omit' to send no reasoning controls (repeat for parallel runs)",
+        help="Explicit effort paired per --model-id; use 'omit' for provider default",
     )
+    parser.add_argument("--parallelism", type=int, default=4)
+    parser.add_argument("--depths", type=parse_depths, help="e.g. 4-15 or 4,6,8 (default: 4-15)")
     parser.add_argument(
-        "--parallelism",
+        "--extend-through",
         type=int,
-        default=4,
-        help="Maximum model runs in flight when options are repeated (default: 4)",
+        help="Extend selected complete base runs through this digit depth",
     )
-    parser.add_argument("--depths", type=parse_depths, help="e.g. 4-10 or 4,6,8 (default: 4-10)")
+    parser.add_argument("--parent-ledger", action="append", help="Explicit extension parent ledger; repeat per run")
+    parser.add_argument("--top-up-existing-per-class", type=int, default=5)
+    parser.add_argument("--new-depths-per-class", type=int, default=15)
+    parser.add_argument("--samples-per-class", type=int, help="Prime and non-prime cases per depth (default: 15)")
     parser.add_argument(
-        "--samples-per-class",
+        "--seed",
         type=int,
-        help="Prime and non-prime cases per digit depth (default: 10 each)",
+        help="Explicit reproducible seed; unset chooses and saves a system-random seed",
     )
-    parser.add_argument("--seed", type=int, help="Reproducible case-generation seed (default: 2026)")
-    parser.add_argument(
-        "--max-retries",
-        type=int,
-        help="Retries after the initial request per case (default: 5; 6 total attempts)",
-    )
+    parser.add_argument("--max-retries", type=int, help="Retries after initial request (default: 5)")
     parser.add_argument("--retry-delay", type=float, help="Exponential backoff base in seconds (default: 1)")
-    parser.add_argument(
-        "--requests-per-minute",
-        type=float,
-        help="Shared maximum completion dispatch rate across model workers (default: 15)",
-    )
+    parser.add_argument("--requests-per-minute", type=float, help="Shared completion rate limit (default: 15)")
     parser.add_argument(
         "--timeout",
         type=float,
-        help="Explicit urllib socket inactivity timeout in seconds (required for new runs; resume uses saved policy)",
+        help="Explicit urllib socket inactivity timeout (required for new runs)",
     )
     parser.add_argument(
         "--max-completion-tokens",
         type=int,
-        help="Explicit completion-token cap per request; unset sends no token cap",
+        help="Explicit completion-token cap; unset sends no token cap",
     )
     parser.add_argument("--results-dir", default=str(PROJECT_ROOT / "results"))
     parser.add_argument("--output", help="Explicit JSONL ledger path (single run only)")
@@ -124,7 +127,7 @@ def _settings(args: argparse.Namespace) -> dict:
             if args.samples_per_class is not None
             else DEFAULT_SAMPLES_PER_CLASS
         ),
-        "seed": args.seed if args.seed is not None else DEFAULT_SEED,
+        "seed": args.seed,
         "max_attempts": (
             (args.max_retries if args.max_retries is not None else DEFAULT_MAX_RETRIES) + 1
         ),
@@ -179,7 +182,7 @@ def _dry_run_text(plan: dict) -> str:
         f"Cases per depth: {plan['samples_per_class']} prime + {plan['samples_per_class']} non-prime",
         f"Total cases / first attempts: {plan['case_count']}",
         f"Maximum completion attempts including retries: {plan['max_total_inference_attempts']}",
-        f"Seed: {plan['seed']}",
+        f"Sampling seed: {plan['seed']} ({plan['seed_source']})",
         f"Dataset SHA-256: {plan['dataset_sha256']}",
         f"Uncached input price: ${plan['prompt_rate_usd_per_million']} / 1M tokens",
         f"Output price: ${plan['completion_rate_usd_per_million']} / 1M tokens",
@@ -213,6 +216,156 @@ def _print_run_result(model_id: str, effort: str | None, result: dict) -> None:
     )
 
 
+def _run_depth_extension(
+    *,
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    api_key: str,
+) -> int:
+    if args.output:
+        parser.error("--output cannot be used with --extend-through")
+    if args.depths is not None or args.samples_per_class is not None:
+        parser.error("extensions inherit parent depths; do not supply --depths or --samples-per-class")
+    if args.max_completion_tokens is not None:
+        parser.error("extensions inherit the parent's token-cap policy; no cap override is allowed")
+    if args.parent_ledger and (args.model_id or args.reasoning_effort):
+        parser.error("use either --parent-ledger or Model ID/Effort selectors")
+
+    model_specs = None if args.parent_ledger else _load_model_specs(args, parser)
+    try:
+        parent_paths = select_parent_ledgers(
+            results_dir=args.results_dir,
+            model_specs=model_specs,
+            parent_ledgers=args.parent_ledger,
+        )
+        result_root = Path(args.results_dir).resolve()
+        if any(Path(path).resolve().parent != result_root for path in parent_paths):
+            raise ValueError("all extension parents must be in --results-dir")
+        initial_parents = load_extension_parents(parent_paths)
+        with locked_parents(initial_parents):
+            parents = load_extension_parents(parent_paths)
+            for parent in parents:
+                if parent.config.timeout_seconds != args.timeout:
+                    raise ValueError(f"timeout mismatch for parent {parent.ledger_path.name}")
+                if args.max_retries is not None and parent.config.max_attempts != args.max_retries + 1:
+                    raise ValueError(f"max-retries mismatch for parent {parent.ledger_path.name}")
+                if args.retry_delay is not None and parent.config.retry_delay_seconds != args.retry_delay:
+                    raise ValueError(f"retry-delay mismatch for parent {parent.ledger_path.name}")
+                if args.requests_per_minute is not None and not math.isclose(
+                    parent.config.min_request_interval_seconds,
+                    60.0 / args.requests_per_minute,
+                    rel_tol=1e-9,
+                    abs_tol=1e-9,
+                ):
+                    raise ValueError(f"request-rate mismatch for parent {parent.ledger_path.name}")
+
+            plan = prepare_extension_plan(
+                results_dir=result_root,
+                parents=parents,
+                target_depth=args.extend_through,
+                top_up_per_class=args.top_up_existing_per_class,
+                new_depths_per_class=args.new_depths_per_class,
+                requested_seed=args.seed,
+            )
+            catalog = OpenRouterClient(api_key, timeout=args.timeout)
+            current_models = {}
+            for parent in parents:
+                identity = (parent.config.model_id, parent.config.reasoning_effort)
+                if identity in current_models:
+                    continue
+                model_info = catalog.resolve_model(parent.config.model_id)
+                OpenRouterClient.validate_reasoning_effort(model_info, parent.config.reasoning_effort)
+                if model_info.prompt_rate_usd_per_million is None or model_info.completion_rate_usd_per_million is None:
+                    raise ValueError(f"OpenRouter catalog lacks input/output rates for {model_info.model_id}")
+                current_models[identity] = model_info
+            specs = [
+                spec
+                if spec.resume_ledger_path is not None
+                else replace(
+                    spec,
+                    model_info=current_models[(spec.config.model_id, spec.config.reasoning_effort)],
+                )
+                for spec in plan.specs
+            ]
+            if args.dry_run:
+                batch = plan.manifest
+                print("DEPTH EXTENSION DRY RUN — no chat-completion inference will be sent")
+                print(f"Extension batch: {plan.batch_id}")
+                print(f"Parent runs: {len(parents)} complete base runs")
+                print(f"Parent depths: {', '.join(map(str, parents[0].config.depths))}")
+                print(f"Target depths: {', '.join(map(str, plan.target_depths))}")
+                print(
+                    f"Added cases per model: {batch['added_case_count']}; "
+                    f"cumulative cases per model: {batch['target_case_count']}"
+                )
+                print(f"Supplement sampling seed: {batch['sampling_seed']} ({batch['seed_source']})")
+                print(
+                    "Supplement per depth (primes + composites): "
+                    + ", ".join(
+                        f"{depth}d={count}+{count}"
+                        for depth, count in sorted(
+                            batch["added_samples_per_class_by_depth"].items(),
+                            key=lambda item: int(item[0]),
+                        )
+                    )
+                )
+                print(f"Cumulative dataset SHA-256: {batch['target_dataset_sha256']}")
+                print("Completion token cap: none; output-only cost bound is unbounded")
+                attempts = parents[0].config.max_attempts
+                print(
+                    f"Maximum completion attempts per case: {attempts} "
+                    f"({attempts - 1} retries); backoff base: "
+                    f"{parents[0].config.retry_delay_seconds:g}s"
+                )
+                interval = parents[0].config.min_request_interval_seconds
+                rate = "disabled" if interval <= 0 else f"{60.0 / interval:.2f} requests/min"
+                print(
+                    f"Timeout: {args.timeout}s socket inactivity · Parallelism: {args.parallelism} · "
+                    f"Rate gate: {rate}"
+                )
+                for parent in parents:
+                    info = current_models[(parent.config.model_id, parent.config.reasoning_effort)]
+                    print(
+                        f"{parent.config.model_id} / {parent.config.reasoning_effort or 'omitted'}: "
+                        f"input=${info.prompt_rate_usd_per_million}/1M output=${info.completion_rate_usd_per_million}/1M"
+                    )
+                return 0
+
+            reporter = ProgressReporter(stream=sys.stderr)
+            rows = run_many(
+                specs,
+                client_factory=lambda timeout: OpenRouterClient(api_key, timeout=timeout),
+                results_dir=result_root,
+                parallelism=args.parallelism,
+                on_progress=reporter,
+                prepared_dataset=plan.prepared_dataset,
+                shared_request_gate=AccountRequestGate(
+                    parents[0].config.min_request_interval_seconds
+                ),
+            )
+            reporter.close()
+            exit_code = 0
+            for row in rows:
+                spec = row["spec"]
+                if row.get("error"):
+                    print(
+                        f"[model_id={spec.config.model_id} effort={spec.config.reasoning_effort}] "
+                        f"failed: {row['error']}",
+                        file=sys.stderr,
+                    )
+                    exit_code = 1
+                    continue
+                result = row["result"]
+                _print_run_result(spec.config.model_id, spec.config.reasoning_effort, result)
+                if not result["complete"] and exit_code == 0:
+                    exit_code = 2
+            if any(row.get("batch_interrupted") for row in rows):
+                return 130
+            return exit_code
+    except (ValueError, OSError, OpenRouterError) as exc:
+        parser.error(str(exc))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -226,6 +379,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--timeout must be finite and positive")
     if args.max_retries is not None and args.max_retries < 0:
         parser.error("--max-retries cannot be negative")
+    if args.extend_through is not None and not 1 <= args.extend_through <= 15:
+        parser.error("--extend-through must be between 1 and 15")
+    if args.extend_through is None and args.parent_ledger:
+        parser.error("--parent-ledger requires --extend-through")
+    if args.top_up_existing_per_class < 0:
+        parser.error("--top-up-existing-per-class cannot be negative")
+    if args.new_depths_per_class <= 0:
+        parser.error("--new-depths-per-class must be positive")
     if (
         args.requests_per_minute is not None
         and (not math.isfinite(args.requests_per_minute) or args.requests_per_minute <= 0)
@@ -234,6 +395,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_settings = (
         args.output,
         args.dry_run,
+        args.extend_through is not None,
+        args.parent_ledger,
         args.model_id,
         args.reasoning_effort,
         args.depths is not None,
@@ -245,8 +408,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.timeout is not None,
         args.max_completion_tokens is not None,
     )
-    if args.resume and any(run_settings):
+    if args.resume and (any(run_settings) or args.extend_through is not None):
         parser.error("--resume uses its saved model/effort/config; do not supply run settings")
+    if args.extend_through is not None and args.output:
+        parser.error("--output cannot be used with --extend-through")
 
     load_dotenv()
     api_key = get_openrouter_key()
@@ -296,10 +461,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_run_result(model_id, effort, result)
         return 0 if result["complete"] else 2
 
+    if args.extend_through is not None:
+        return _run_depth_extension(args=args, parser=parser, api_key=api_key)
+
     specs = _load_model_specs(args, parser)
     if args.output and len(specs) > 1:
         parser.error("--output can only be used with one model ID/effort pair")
     settings = _settings(args)
+    if settings["seed"] is None:
+        settings["seed"] = secrets.randbits(64)
+        settings["seed_source"] = "system_random"
+    else:
+        settings["seed_source"] = "explicit"
     configs = [_config_for(spec, settings) for spec in specs]
     catalog_client = OpenRouterClient(api_key, timeout=settings["timeout_seconds"])
     run_specs: list[ModelRunSpec] = []
@@ -323,7 +496,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     reporter = ProgressReporter(stream=sys.stderr)
     if len(run_specs) == 1:
         spec = run_specs[0]
-        total = len(spec.config.depths) * spec.config.samples_per_class * 2
+        total = spec.config.scheduled_case_count
         reporter.set_batch_total(1)
         reporter.register_model(spec.config.model_id, spec.config.reasoning_effort, total)
         client = OpenRouterClient(api_key, timeout=spec.config.timeout_seconds)

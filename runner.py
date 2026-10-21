@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -30,9 +31,8 @@ from parse import parse_response
 from prompt import make_prompt
 from request_gate import AccountRequestGate
 
-DEFAULT_DEPTHS = tuple(range(4, 11))
-DEFAULT_SAMPLES_PER_CLASS = 10
-DEFAULT_SEED = 2026
+DEFAULT_DEPTHS = tuple(range(4, 16))
+DEFAULT_SAMPLES_PER_CLASS = 15
 DEFAULT_MAX_RETRIES = 5
 DEFAULT_MAX_ATTEMPTS = DEFAULT_MAX_RETRIES + 1
 DEFAULT_RETRY_DELAY_SECONDS = 1.0
@@ -71,9 +71,11 @@ class RunConfig:
     model_id: str
     reasoning_effort: str | None
     timeout_seconds: float
+    seed: int
+    seed_source: str = "explicit"
     depths: tuple[int, ...] = DEFAULT_DEPTHS
     samples_per_class: int = DEFAULT_SAMPLES_PER_CLASS
-    seed: int = DEFAULT_SEED
+    samples_per_class_by_depth: Mapping[int, int] | None = None
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
     retry_delay_seconds: float = DEFAULT_RETRY_DELAY_SECONDS
     max_completion_tokens: int | None = None
@@ -86,12 +88,27 @@ class RunConfig:
             raise ValueError("model_id must be fully qualified (provider/model)")
         if any(character.isspace() for character in self.model_id):
             raise ValueError("model_id must not contain whitespace")
-        if not self.depths or any(depth < 1 or depth > 10 for depth in self.depths):
-            raise ValueError("depths must be between 1 and 10")
+        if not self.depths or any(depth < 1 or depth > 15 for depth in self.depths):
+            raise ValueError("depths must be between 1 and 15")
         if len(set(self.depths)) != len(self.depths):
             raise ValueError("depths must not contain duplicates")
         if self.samples_per_class <= 0:
             raise ValueError("samples_per_class must be positive")
+        if self.samples_per_class_by_depth is not None:
+            if set(self.samples_per_class_by_depth) != set(self.depths):
+                raise ValueError("per-depth samples must cover exactly the configured depths")
+            values = list(self.samples_per_class_by_depth.values())
+            if any(
+                isinstance(value, bool) or not isinstance(value, int) or value <= 0
+                for value in values
+            ):
+                raise ValueError("per-depth sample counts must be positive integers")
+            if self.samples_per_class != max(values):
+                raise ValueError("samples_per_class must equal the maximum per-depth count")
+        if isinstance(self.seed, bool) or not isinstance(self.seed, int):
+            raise ValueError("resolved case seed must be an integer")
+        if self.seed_source not in {"explicit", "system_random"}:
+            raise ValueError("seed_source must be 'explicit' or 'system_random'")
         if self.max_attempts <= 0:
             raise ValueError("max_attempts must be positive")
         if self.retry_delay_seconds < 0:
@@ -116,6 +133,12 @@ class RunConfig:
             or any(character.isspace() for character in self.reasoning_effort)
         ):
             raise ValueError("reasoning_effort must be explicitly specified as a non-empty value")
+
+    @property
+    def scheduled_case_count(self) -> int:
+        if self.samples_per_class_by_depth is None:
+            return len(self.depths) * self.samples_per_class * 2
+        return sum(self.samples_per_class_by_depth[depth] * 2 for depth in self.depths)
 
 
 def _request_gate_for_config(
@@ -181,16 +204,20 @@ def _write_or_verify_dataset(
     results_dir: Path, cases: Sequence[Case], config: RunConfig
 ) -> tuple[Path, dict[str, Any]]:
     records = [_case_record(case) for case in cases]
-    content_hash = _sha256(
-        {
-            "schema_version": DATASET_SCHEMA_VERSION,
-            "generator_version": CASE_GENERATOR_VERSION,
-            "seed": config.seed,
-            "depths": list(config.depths),
-            "samples_per_class": config.samples_per_class,
-            "cases": records,
+    hash_payload = {
+        "schema_version": DATASET_SCHEMA_VERSION,
+        "generator_version": CASE_GENERATOR_VERSION,
+        "seed": config.seed,
+        "depths": list(config.depths),
+        "samples_per_class": config.samples_per_class,
+        "cases": records,
+    }
+    if config.samples_per_class_by_depth is not None:
+        hash_payload["samples_per_class_by_depth"] = {
+            str(depth): config.samples_per_class_by_depth[depth]
+            for depth in config.depths
         }
-    )
+    content_hash = _sha256(hash_payload)
     dataset_id = f"prime-{CASE_GENERATOR_VERSION}-{content_hash[:16]}"
     dataset_dir = results_dir / "datasets"
     dataset_path = dataset_dir / f"{dataset_id}.json"
@@ -204,6 +231,11 @@ def _write_or_verify_dataset(
         "samples_per_class": config.samples_per_class,
         "cases": records,
     }
+    if config.samples_per_class_by_depth is not None:
+        dataset_payload["samples_per_class_by_depth"] = {
+            str(depth): config.samples_per_class_by_depth[depth]
+            for depth in config.depths
+        }
     if dataset_path.exists():
         existing = json.loads(dataset_path.read_text(encoding="utf-8"))
         if existing.get("sha256") != content_hash or existing.get("cases") != records:
@@ -264,6 +296,7 @@ def _make_manifest(
     dataset_path: Path,
     dataset_payload: Mapping[str, Any],
     ledger_path: Path,
+    extension_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if model_info.prompt_rate_usd_per_million is None or model_info.completion_rate_usd_per_million is None:
         raise ValueError(
@@ -289,6 +322,16 @@ def _make_manifest(
         "config": {
             **asdict(config),
             "depths": list(config.depths),
+            **(
+                {
+                    "samples_per_class_by_depth": {
+                        str(depth): config.samples_per_class_by_depth[depth]
+                        for depth in config.depths
+                    }
+                }
+                if config.samples_per_class_by_depth is not None
+                else {}
+            ),
         },
         "prompt": {"version": PROMPT_VERSION, "template": PROMPT_TEMPLATE},
         "parser_version": PARSER_VERSION,
@@ -301,6 +344,16 @@ def _make_manifest(
             "seed": config.seed,
             "depths": list(config.depths),
             "samples_per_class": config.samples_per_class,
+            **(
+                {
+                    "samples_per_class_by_depth": {
+                        str(depth): config.samples_per_class_by_depth[depth]
+                        for depth in config.depths
+                    }
+                }
+                if config.samples_per_class_by_depth is not None
+                else {}
+            ),
         },
         "pricing": {
             "source": model_info.pricing_source,
@@ -315,6 +368,8 @@ def _make_manifest(
         },
         "ledger_file": ledger_path.name,
     }
+    if extension_metadata is not None:
+        manifest["extension"] = dict(extension_metadata)
     fingerprint_payload = {
         "model_id": manifest["model"]["model_id"],
         "reasoning_effort": config.reasoning_effort,
@@ -324,6 +379,8 @@ def _make_manifest(
         "dataset_sha256": manifest["dataset"]["sha256"],
         "pricing": manifest["pricing"],
     }
+    if extension_metadata is not None:
+        fingerprint_payload["extension"] = manifest["extension"]
     manifest["config_sha256"] = _sha256(fingerprint_payload)
     return manifest
 
@@ -376,6 +433,8 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> None:
         "dataset_sha256": dataset.get("sha256"),
         "pricing": pricing,
     }
+    if manifest.get("extension") is not None:
+        expected_payload["extension"] = manifest["extension"]
     # Read old manifests from the first MVP release, where display_model was
     # part of the config hash. New manifests keep model ID and effort separate.
     if "display_model" in manifest:
@@ -406,16 +465,17 @@ def _load_dataset(manifest_path: Path, dataset_info: Mapping[str, Any]) -> list[
     ]
     if len(cases) != int(dataset_info.get("case_count", -1)):
         raise ValueError("saved dataset case count mismatch; refusing resume")
-    if _sha256(
-        {
-            "schema_version": DATASET_SCHEMA_VERSION,
-            "generator_version": data.get("generator_version"),
-            "seed": data.get("seed"),
-            "depths": data.get("depths"),
-            "samples_per_class": data.get("samples_per_class"),
-            "cases": [_case_record(case) for case in cases],
-        }
-    ) != dataset_info.get("sha256"):
+    hash_payload = {
+        "schema_version": DATASET_SCHEMA_VERSION,
+        "generator_version": data.get("generator_version"),
+        "seed": data.get("seed"),
+        "depths": data.get("depths"),
+        "samples_per_class": data.get("samples_per_class"),
+        "cases": [_case_record(case) for case in cases],
+    }
+    if data.get("samples_per_class_by_depth") is not None:
+        hash_payload["samples_per_class_by_depth"] = data["samples_per_class_by_depth"]
+    if _sha256(hash_payload) != dataset_info.get("sha256"):
         raise ValueError("saved dataset contents do not match their hash")
     return cases
 
@@ -430,7 +490,13 @@ def _config_from_manifest(manifest: Mapping[str, Any]) -> RunConfig:
         reasoning_effort=effort,
         depths=tuple(int(depth) for depth in config["depths"]),
         samples_per_class=int(config["samples_per_class"]),
+        samples_per_class_by_depth=(
+            {int(depth): int(count) for depth, count in config["samples_per_class_by_depth"].items()}
+            if isinstance(config.get("samples_per_class_by_depth"), Mapping)
+            else None
+        ),
         seed=int(config["seed"]),
+        seed_source=str(config.get("seed_source", "explicit")),
         max_attempts=int(config["max_attempts"]),
         retry_delay_seconds=float(config["retry_delay_seconds"]),
         timeout_seconds=float(config["timeout_seconds"]),
@@ -1274,6 +1340,7 @@ def _run_new_unlocked(
     prepared_dataset: PreparedDataset | None = None,
     cancel_event: threading.Event | None = None,
     request_gate: AccountRequestGate | None = None,
+    extension_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a frozen dataset/run manifest and execute a new evaluation."""
     config.validate()
@@ -1286,16 +1353,25 @@ def _run_new_unlocked(
     root = Path(results_dir).resolve()
     root.mkdir(parents=True, exist_ok=True)
     if prepared_dataset is None:
+        if config.samples_per_class_by_depth is not None:
+            raise ValueError("per-depth sample plans require a frozen prepared dataset")
         cases = generate_cases(config.depths, config.samples_per_class, config.seed)
         dataset_path, dataset_payload = _write_or_verify_dataset(root, cases, config)
     else:
         cases = list(prepared_dataset.cases)
         dataset_path = prepared_dataset.path.resolve()
         dataset_payload = dict(prepared_dataset.payload)
+        saved_per_depth = dataset_payload.get("samples_per_class_by_depth")
+        saved_per_depth = (
+            {int(depth): int(count) for depth, count in saved_per_depth.items()}
+            if isinstance(saved_per_depth, Mapping)
+            else None
+        )
         if (
             int(dataset_payload.get("seed", -1)) != config.seed
             or tuple(dataset_payload.get("depths", ())) != config.depths
             or int(dataset_payload.get("samples_per_class", -1)) != config.samples_per_class
+            or saved_per_depth != config.samples_per_class_by_depth
             or not dataset_path.is_file()
         ):
             raise ValueError("prepared dataset does not match run configuration")
@@ -1315,6 +1391,7 @@ def _run_new_unlocked(
         dataset_path=dataset_path,
         dataset_payload=dataset_payload,
         ledger_path=ledger,
+        extension_metadata=extension_metadata,
     )
     _atomic_write_json(_manifest_path(ledger), manifest)
     _write_run_created(ledger, manifest)
@@ -1344,6 +1421,7 @@ def run_new(
     prepared_dataset: PreparedDataset | None = None,
     cancel_event: threading.Event | None = None,
     request_gate: AccountRequestGate | None = None,
+    extension_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Start a run while exclusively owning its target ledger."""
     root = Path(results_dir).resolve()
@@ -1364,6 +1442,7 @@ def run_new(
                 prepared_dataset=prepared_dataset,
                 cancel_event=cancel_event,
                 request_gate=request_gate,
+                extension_metadata=extension_metadata,
             )
     except KeyboardInterrupt as exc:
         raise EvaluationInterrupted(ledger) from exc
@@ -1374,11 +1453,44 @@ def prepare_case_dataset(
 ) -> PreparedDataset:
     """Generate and persist the one immutable case manifest before batch dispatch."""
     config.validate()
+    if config.samples_per_class_by_depth is not None:
+        raise ValueError("per-depth sample plans require explicit prepared cases")
     root = Path(results_dir).resolve()
     root.mkdir(parents=True, exist_ok=True)
     cases = generate_cases(config.depths, config.samples_per_class, config.seed)
     dataset_path, dataset_payload = _write_or_verify_dataset(root, cases, config)
     return PreparedDataset(tuple(cases), dataset_path, dataset_payload)
+
+
+def prepare_case_dataset_from_cases(
+    *,
+    results_dir: str | Path,
+    config: RunConfig,
+    cases: Sequence[Case],
+) -> PreparedDataset:
+    """Persist a caller-frozen case subset after checking its balanced contract."""
+    config.validate()
+    case_list = list(cases)
+    if not case_list:
+        raise ValueError("prepared case subset must not be empty")
+    if any(case.depth not in config.depths for case in case_list):
+        raise ValueError("prepared cases contain a depth outside the run configuration")
+    counts = Counter((case.depth, case.label) for case in case_list)
+    expected = {
+        (depth, label): (
+            config.samples_per_class_by_depth[depth]
+            if config.samples_per_class_by_depth is not None
+            else config.samples_per_class
+        )
+        for depth in config.depths
+        for label in ("PRIME", "COMPOSITE")
+    }
+    if counts != expected:
+        raise ValueError("prepared case subset does not match balanced per-depth counts")
+    root = Path(results_dir).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    dataset_path, dataset_payload = _write_or_verify_dataset(root, case_list, config)
+    return PreparedDataset(tuple(case_list), dataset_path, dataset_payload)
 
 
 def _resume_run_unlocked(
@@ -1487,6 +1599,7 @@ def create_dry_run_plan(
         "depths": list(config.depths),
         "samples_per_class": config.samples_per_class,
         "seed": config.seed,
+        "seed_source": config.seed_source,
         "case_count": len(cases),
         "cases_by_depth": {
             str(depth): sum(1 for case in cases if case.depth == depth)

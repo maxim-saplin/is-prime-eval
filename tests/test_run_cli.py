@@ -178,7 +178,7 @@ class RunCliTests(unittest.TestCase):
         self.assertIn("Reasoning effort: low", text)
         self.assertIn("Reasoning effort: high", text)
         self.assertIn("Maximum retries per case: 5 (6 total attempts)", text)
-        self.assertIn("Maximum completion attempts including retries: 840", text)
+        self.assertIn("Maximum completion attempts including retries: 2160", text)
         self.assertIn("Shared maximum request rate: 15.00 per minute (4.00s minimum spacing)", text)
         self.assertIn("Completion token cap: none (no max_completion_tokens or max_tokens parameter sent)", text)
         self.assertIn("Output-only cap estimate: unbounded", text)
