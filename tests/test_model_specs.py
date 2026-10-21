@@ -27,9 +27,15 @@ class ParseModelSpecsTests(unittest.TestCase):
             "xhigh",
         )
 
-    def test_omitted_effort_requires_explicit_sentinel(self):
-        with self.assertRaisesRegex(ValueError, "exactly one --reasoning-effort"):
-            parse_model_specs(["openai/gpt-4-turbo"], None)
+    def test_missing_effort_uses_provider_default(self):
+        self.assertEqual(
+            parse_model_specs(["inception/mercury-3"], None),
+            [ModelSpec("inception/mercury-3", None)],
+        )
+        self.assertEqual(
+            parse_model_specs(["provider/a", "provider/b"], None),
+            [ModelSpec("provider/a", None), ModelSpec("provider/b", None)],
+        )
         self.assertEqual(
             parse_model_specs(["openai/gpt-4-turbo"], ["omit"]),
             [ModelSpec("openai/gpt-4-turbo", None)],

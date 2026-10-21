@@ -227,7 +227,18 @@ class ExtensionIntegrationTests(unittest.TestCase):
                     "--dry-run",
                 ]
             )
+            inherited_status = run.main(
+                [
+                    "--parent-ledger", str(self.parent_ledgers[0]),
+                    "--parent-ledger", str(self.parent_ledgers[1]),
+                    "--extend-through", "15",
+                    "--results-dir", str(self.root),
+                    "--dry-run",
+                ]
+            )
         self.assertEqual(status, 0)
+        self.assertEqual(inherited_status, 0)
+        self.assertEqual(output.getvalue().count("Timeout: 2.0s socket inactivity"), 2)
         self.assertIn("Added cases per model: 220", output.getvalue())
         self.assertIn("Supplement sampling seed:", output.getvalue())
         self._assert_parent_hashes_unchanged()

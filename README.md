@@ -27,7 +27,13 @@ The key is loaded from `.env` or the `OR_KEY` environment variable and is never 
 
 ## Preflight and single-model runs
 
-Every new run requires an explicit finite positive `--timeout`. It is urllib's socket inactivity timeout, not a strict total wall-clock deadline; a long-running response can exceed it while data keeps arriving. Choose it deliberately based on the model/provider. For the examples below, set `TIMEOUT_SECONDS` yourself before running the command. For the authorized 14-pair baseline, the chosen value is `600`:
+A single-model run needs only the model ID:
+
+```sh
+uv run run.py --model-id inception/mercury-3
+```
+
+New runs default to a **600-second socket inactivity timeout**, **provider-default reasoning**, and **no completion-token cap**. The resolved settings are printed before evaluation. `--timeout` and `--reasoning-effort` override these defaults; resume and extension preserve their saved policies. The timeout is not a strict total wall-clock deadline: a response may exceed it while data keeps arriving. For the explicit override examples below:
 
 ```sh
 TIMEOUT_SECONDS=600
@@ -52,7 +58,7 @@ A live run keeps the two settings separate:
   --timeout "$TIMEOUT_SECONDS"
 ```
 
-Model ID and reasoning effort are separate explicit fields; every model requires one `--reasoning-effort`. For a model that should receive no reasoning control, use the explicit `omit` sentinel:
+Model ID and reasoning effort are separate fields. When `--reasoning-effort` is absent, no reasoning control is sent. The optional `omit` sentinel explicitly selects the same provider-default behavior:
 
 ```sh
 .venv/bin/python run.py \
@@ -60,13 +66,13 @@ Model ID and reasoning effort are separate explicit fields; every model requires
   --timeout "$TIMEOUT_SECONDS"
 ```
 
-`omit` is not sent to the provider: it omits reasoning controls and uses the provider's default behavior (which does not necessarily disable default reasoning). The provider level `none` is a distinct literal effort and is sent unchanged. Supported values depend on the model/provider; unsupported settings are not silently substituted. Omission is saved as JSON `null` and preserved on resume; no effort is inferred or silently selected.
+`omit` is not sent to the provider: it omits reasoning controls and uses the provider's default behavior (which does not necessarily disable default reasoning). The provider level `none` is a distinct literal effort and is sent unchanged. Supported values depend on the model/provider; unsupported settings are not silently substituted. Omission is saved as JSON `null` and preserved on resume; no specific reasoning level is inferred.
 
 Other defaults are depths `4-15`, 15 examples of each class per depth, a system-random seed recorded in the manifest, and **five retries after the initial attempt** (six total attempts per case). Transient/API retries use an exponential backoff with a 1-second base and bounded ±20% jitter; invalid or truncated answers are recorded and are not retried for a better answer. Set `--max-retries N` to change retries after the initial request. By default, requests send neither `max_completion_tokens` nor `max_tokens`; use `--max-completion-tokens N` only as an explicit opt-in cap. There is no adapter fallback between these parameter names. Provider/model-side output limits may still truncate responses; dry runs report the output-only cost bound as unbounded when no explicit cap is set.
 
 ## Parallel model runs
 
-Repeat both `--model-id` and `--reasoning-effort` for every run. The first effort pairs with the first model ID, the second with the second, and so on. Use the explicit `omit` sentinel for models that should receive no reasoning controls. This uses CLI arguments only—no external model-list file or model-name suffix parsing:
+Repeat `--model-id` for multiple runs. With no effort options, every model uses provider-default reasoning. If any `--reasoning-effort` options are supplied, provide one for every model: the first effort pairs with the first ID, and so on. Use `omit` where provider-default behavior is wanted. This uses CLI arguments only—no external model-list file or model-name suffix parsing:
 
 ```sh
 .venv/bin/python run.py \

@@ -20,9 +20,10 @@ def parse_model_specs(
 ) -> list[ModelSpec]:
     """Pair repeated CLI values by order; never infer effort from the model ID.
 
-    Provide exactly one explicit effort per model. The CLI sentinel ``omit``
-    maps to None so reasoning controls are not sent; all other values (including
-    provider level ``none``) are passed through unchanged.
+    With no effort options, use provider defaults for every model. If effort
+    options are supplied, require one per model so partial lists cannot be
+    mispaired. The sentinel ``omit`` maps to None; other values (including
+    provider level ``none``) pass through unchanged.
     """
     if isinstance(model_ids, str) or isinstance(reasoning_efforts, str):
         raise TypeError("model IDs and efforts must be supplied as repeated CLI values")
@@ -30,6 +31,8 @@ def parse_model_specs(
     efforts = list(reasoning_efforts or [])
     if not ids:
         raise ValueError("provide at least one --model-id")
+    if not efforts:
+        efforts = ["omit"] * len(ids)
     if len(ids) != len(efforts):
         raise ValueError(
             "provide exactly one --reasoning-effort for each --model-id, in the same order"

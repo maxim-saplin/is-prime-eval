@@ -38,6 +38,8 @@ from runner import (
 )
 from settings import PROJECT_ROOT, get_openrouter_key, load_dotenv
 
+DEFAULT_CLI_TIMEOUT_SECONDS = 600.0
+
 
 def parse_depths(value: str) -> tuple[int, ...]:
     """Parse an inclusive depth range (``4-10``) or comma-separated list."""
@@ -77,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--reasoning-effort",
         action="append",
-        help="Explicit effort paired per --model-id; use 'omit' for provider default",
+        help="Optional effort (default: provider default); when supplied, pair one per --model-id; 'omit' uses provider default",
     )
     parser.add_argument("--parallelism", type=int, default=4)
     parser.add_argument("--depths", type=parse_depths, help="e.g. 4-15 or 4,6,8 (default: 4-15)")
@@ -101,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--timeout",
         type=float,
-        help="Explicit urllib socket inactivity timeout (required for new runs)",
+        help="urllib socket inactivity timeout in seconds (default: 600 for new runs; resume/extension inherit saved settings)",
     )
     parser.add_argument(
         "--max-completion-tokens",
@@ -141,7 +143,9 @@ def _settings(args: argparse.Namespace) -> dict:
             if args.retry_delay is not None
             else DEFAULT_RETRY_DELAY_SECONDS
         ),
-        "timeout_seconds": args.timeout,
+        "timeout_seconds": (
+            args.timeout if args.timeout is not None else DEFAULT_CLI_TIMEOUT_SECONDS
+        ),
         "max_completion_tokens": args.max_completion_tokens,
     }
 
@@ -245,7 +249,7 @@ def _run_depth_extension(
         with locked_parents(initial_parents):
             parents = load_extension_parents(parent_paths)
             for parent in parents:
-                if parent.config.timeout_seconds != args.timeout:
+                if args.timeout is not None and parent.config.timeout_seconds != args.timeout:
                     raise ValueError(f"timeout mismatch for parent {parent.ledger_path.name}")
                 if args.max_retries is not None and parent.config.max_attempts != args.max_retries + 1:
                     raise ValueError(f"max-retries mismatch for parent {parent.ledger_path.name}")
@@ -267,7 +271,8 @@ def _run_depth_extension(
                 new_depths_per_class=args.new_depths_per_class,
                 requested_seed=args.seed,
             )
-            catalog = OpenRouterClient(api_key, timeout=args.timeout)
+            timeout_seconds = parents[0].config.timeout_seconds
+            catalog = OpenRouterClient(api_key, timeout=timeout_seconds)
             current_models = {}
             for parent in parents:
                 identity = (parent.config.model_id, parent.config.reasoning_effort)
@@ -320,7 +325,7 @@ def _run_depth_extension(
                 interval = parents[0].config.min_request_interval_seconds
                 rate = "disabled" if interval <= 0 else f"{60.0 / interval:.2f} requests/min"
                 print(
-                    f"Timeout: {args.timeout}s socket inactivity · Parallelism: {args.parallelism} · "
+                    f"Timeout: {timeout_seconds}s socket inactivity · Parallelism: {args.parallelism} · "
                     f"Rate gate: {rate}"
                 )
                 for parent in parents:
@@ -371,8 +376,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.parallelism <= 0:
         parser.error("--parallelism must be positive")
-    if not args.resume and args.timeout is None:
-        parser.error("new runs require an explicit urllib socket timeout via --timeout")
     if args.timeout is not None and (
         not math.isfinite(args.timeout) or args.timeout <= 0
     ):
@@ -493,6 +496,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (ValueError, OSError, OpenRouterError) as exc:
         parser.error(str(exc))
 
+    for spec in run_specs:
+        config = spec.config
+        effort = config.reasoning_effort if config.reasoning_effort is not None else "provider default"
+        cap = config.max_completion_tokens if config.max_completion_tokens is not None else "none"
+        print(
+            f"Run settings: {config.model_id} | reasoning: {effort} | "
+            f"socket timeout: {config.timeout_seconds:g}s | token cap: {cap}",
+            flush=True,
+        )
     reporter = ProgressReporter(stream=sys.stderr)
     if len(run_specs) == 1:
         spec = run_specs[0]

@@ -54,18 +54,33 @@ class FakeCatalogClient(OpenRouterClient):
 
 
 class RunCliTests(unittest.TestCase):
-    def test_new_cli_run_requires_an_explicit_timeout_policy(self):
-        with redirect_stderr(io.StringIO()) as errors:
-            with self.assertRaises(SystemExit) as caught:
-                main([
-                    "--model-id", "openai/gpt-6-luna",
-                    "--reasoning-effort", "low",
-                    "--dry-run",
-                ])
-        self.assertEqual(caught.exception.code, 2)
-        self.assertIn("explicit urllib socket timeout via --timeout", errors.getvalue())
+    def test_bare_model_command_uses_visible_reasonable_defaults(self):
+        output = io.StringIO()
+        result = {
+            "complete": True, "ledger_path": "offline.jsonl",
+            "manifest_path": "offline.manifest.json", "scheduled_cases": 360,
+            "summary": {"correct": 360, "incorrect": 0},
+        }
+        with (
+            patch("run.OpenRouterClient", FakeCatalogClient),
+            patch("run.load_dotenv"),
+            patch("run.get_openrouter_key", return_value="test-key"),
+            patch("run.run_new", return_value=result) as execute,
+            redirect_stdout(output), redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(main(["--model-id", "inception/mercury-3"]), 0)
+        config = execute.call_args.kwargs["config"]
+        self.assertEqual(config.model_id, "inception/mercury-3")
+        self.assertEqual(config.timeout_seconds, 600)
+        self.assertIsNone(config.reasoning_effort)
+        self.assertIsNone(config.max_completion_tokens)
+        self.assertEqual(config.depths, tuple(range(4, 16)))
+        self.assertEqual(config.samples_per_class, 15)
+        self.assertEqual(config.seed_source, "system_random")
+        self.assertIn("reasoning: provider default", output.getvalue())
+        self.assertIn("socket timeout: 600s | token cap: none", output.getvalue())
 
-    def test_single_run_requires_explicit_separate_model_id_and_effort(self):
+    def test_single_run_accepts_explicit_separate_model_id_and_effort(self):
         args = build_parser().parse_args(
             ["--model-id", "openai/gpt-6-luna", "--reasoning-effort", "high"]
         )
@@ -77,7 +92,7 @@ class RunCliTests(unittest.TestCase):
         settings = _settings(args)
         self.assertEqual(settings["max_attempts"], 6)
         self.assertEqual(settings["max_completion_tokens"], None)
-        self.assertIsNone(settings["timeout_seconds"])
+        self.assertEqual(settings["timeout_seconds"], 600)
         self.assertEqual(settings["min_request_interval_seconds"], 4.0)
         explicit = build_parser().parse_args(
             ["--max-retries", "5", "--requests-per-minute", "15"]
@@ -100,19 +115,21 @@ class RunCliTests(unittest.TestCase):
                     build_parser().parse_args(argv)
             self.assertEqual(caught.exception.code, 2)
 
-    def test_missing_effort_fails_but_omit_sentinel_allows_non_reasoning_model(self):
+    def test_missing_effort_and_omit_sentinel_use_provider_default(self):
         FakeCatalogClient.resolved_ids = []
+        output = io.StringIO()
         with (
             patch("run.OpenRouterClient", FakeCatalogClient),
             patch("run.load_dotenv"),
             patch("run.get_openrouter_key", return_value="test-key"),
-            redirect_stderr(io.StringIO()),
+            redirect_stdout(output), redirect_stderr(io.StringIO()),
         ):
-            with self.assertRaises(SystemExit) as caught:
-                main(["--model-id", "openai/gpt-4-turbo", "--timeout", "2", "--dry-run"])
-        self.assertEqual(caught.exception.code, 2)
-        self.assertEqual(FakeCatalogClient.resolved_ids, [])
+            self.assertEqual(main(["--model-id", "openai/gpt-4-turbo", "--timeout", "2", "--dry-run"]), 0)
+        self.assertEqual(FakeCatalogClient.resolved_ids, ["openai/gpt-4-turbo"])
+        self.assertIn("Reasoning effort: omitted (provider default)", output.getvalue())
+        self.assertIn("Request timeout: 2.0s", output.getvalue())
 
+        FakeCatalogClient.resolved_ids = []
         output = io.StringIO()
         with (
             patch("run.OpenRouterClient", FakeCatalogClient),
