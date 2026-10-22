@@ -11,7 +11,7 @@ import runner as runner_module
 from cases import is_prime
 from openrouter import ModelInfo, OpenRouterError
 from progress import ProgressReporter
-from report import render_leaderboard, summarize_run
+from scripts.report import render_leaderboard, summarize_run
 from runner import RunConfig, _new_ledger_path, resume_run, run_new
 
 

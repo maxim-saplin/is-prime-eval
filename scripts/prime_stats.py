@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Generate exact prime counts for 4–15 digit integers in prime-stats.md.
+"""Generate exact prime counts for 4–15 digit integers in docs/prime-stats.md.
 
-Setup and run from this directory:
+Setup and run from the repository root:
     uv venv .venv
     uv pip install --python .venv/bin/python -r requirements.txt
-    .venv/bin/python prime_stats.py
+    .venv/bin/python scripts/prime_stats.py
 
 Uses libprimecount through primecountpy; does not enumerate or store primes.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 from primecountpy import prime_pi
 
 
-OUTPUT_PATH = Path(__file__).resolve().with_name("prime-stats.md")
+OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "prime-stats.md"
 
 
 def generate_report() -> str:
@@ -53,10 +53,10 @@ def generate_report() -> str:
         "primes less than or equal to `x`. The percentage is `100 × count / (U − L + 1)`.",
         "No individual primes are enumerated or saved.",
         "",
-        "Regenerate from the repository directory:",
+        "Regenerate from the repository root:",
         "",
         "```sh",
-        ".venv/bin/python prime_stats.py",
+        ".venv/bin/python scripts/prime_stats.py",
         "```",
         "",
     ])

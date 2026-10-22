@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 
 from cases import is_prime
-from enrich_generations import enrich_ledger
+from scripts.enrich_generations import enrich_ledger
 from openrouter import ModelInfo
-from report import summarize_run
+from scripts.report import summarize_run
 from runner import RunConfig, run_new
 
 

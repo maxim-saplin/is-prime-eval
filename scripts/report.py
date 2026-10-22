@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
+
+# Allow running as `python scripts/report.py` from the repo root
+# while keeping library modules at the repository root.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from decimal import Decimal
 import hashlib
 import json
@@ -39,7 +48,13 @@ def wilson_95_ci(successes: int, trials: int) -> tuple[float, float] | None:
         )
         / denominator
     )
-    return max(0.0, center - margin), min(1.0, center + margin)
+    lower = max(0.0, center - margin)
+    upper = min(1.0, center + margin)
+    if successes == 0:
+        lower = 0.0
+    if successes == trials:
+        upper = 1.0
+    return lower, upper
 
 
 def _ci_cell(successes: int, trials: int) -> str:
@@ -399,6 +414,273 @@ def _policy_label(summary: Mapping[str, Any]) -> str:
     return f"{timeout}s · {attempts} attempts · {retry}s retry · {cap_label} · {rate}"
 
 
+COMPACT_DEPTHS = tuple(range(7, 16))
+
+
+def _compact_model_label(summary: Mapping[str, Any]) -> str:
+    """Strip the provider prefix; append the reasoning effort as a suffix."""
+    model = str(summary.get("model_id", "unknown"))
+    label = model.split("/", 1)[-1] if "/" in model else model
+    effort = summary.get("reasoning_effort")
+    if effort is None:
+        return label
+    return f"{label}-{effort}"
+
+
+def _scope_counts(
+    summary: Mapping[str, Any], depths: Sequence[int] = COMPACT_DEPTHS
+) -> tuple[int, int, list[int]]:
+    """Correct/scheduled counts restricted to the requested depths."""
+    by_depth = summary.get("by_depth", {})
+    present = [depth for depth in depths if depth in by_depth]
+    scheduled = sum(int(by_depth[depth]["scheduled"]) for depth in present)
+    correct = sum(int(by_depth[depth]["correct"]) for depth in present)
+    return correct, scheduled, present
+
+
+def _scope_token_stats(
+    summary: Mapping[str, Any], depths: Sequence[int] = COMPACT_DEPTHS
+) -> dict[str, Any]:
+    """Total prompt+completion tokens across scoped attempts, retries included.
+
+    Unknown usage is never imputed as zero; coverage counts attempts whose usage
+    carried both a prompt and a completion token count.
+    """
+    targets = set(depths)
+    total = 0
+    known = 0
+    for attempt in summary.get("attempts", {}).values():
+        if int(attempt.get("depth", -1)) not in targets:
+            continue
+        usage = attempt.get("usage") or {}
+        prompt = usage.get("estimate_prompt_tokens")
+        if prompt is None:
+            prompt = usage.get("prompt_tokens")
+        completion = usage.get("estimate_completion_tokens")
+        if completion is None:
+            completion = usage.get("completion_tokens")
+        if (
+            isinstance(prompt, int) and not isinstance(prompt, bool) and prompt >= 0
+            and isinstance(completion, int) and not isinstance(completion, bool) and completion >= 0
+        ):
+            total += prompt + completion
+            known += 1
+    return {"total_tokens": total, "known_token_attempts": known}
+
+
+def _scope_attempts(
+    summary: Mapping[str, Any], depths: Sequence[int] = COMPACT_DEPTHS
+) -> list[Mapping[str, Any]]:
+    targets = set(depths)
+    return [
+        attempt
+        for attempt in summary.get("attempts", {}).values()
+        if int(attempt.get("depth", -1)) in targets
+    ]
+
+
+def _format_seconds(total: float) -> str:
+    seconds = int(round(total))
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m{seconds % 60:02d}s"
+    return f"{seconds // 3600}h{seconds % 3600 // 60:02d}m"
+
+
+def _plain_value_cell(value_text: str, known: int) -> str:
+    """Compact cell: plain numeric total when any data is known, else `—`.
+
+    No sidenotes, markers, or imputation: partial coverage is disclosed only
+    in the coverage section under the table.
+    """
+    if known <= 0:
+        return "—"
+    return value_text
+
+
+LEADERBOARD_MARK_START = "<!-- leaderboard:start -->"
+LEADERBOARD_MARK_END = "<!-- leaderboard:end -->"
+
+
+def _compact_eligible_runs(
+    summaries: Sequence[Mapping[str, Any]], depths: Sequence[int] = COMPACT_DEPTHS
+) -> list[Mapping[str, Any]]:
+    """Complete runs covering every requested depth with positive scheduled cases."""
+    eligible = []
+    for run in summaries:
+        if not run["complete"]:
+            continue
+        by_depth = run.get("by_depth", {})
+        if all(
+            depth in by_depth and int(by_depth[depth].get("scheduled", 0)) > 0
+            for depth in depths
+        ):
+            eligible.append(run)
+    return eligible
+
+
+def _compact_rows(
+    summaries: Sequence[Mapping[str, Any]], depths: Sequence[int] = COMPACT_DEPTHS
+) -> tuple[list[dict[str, Any]], bool]:
+    """Build compact rows; returns (rows, any_scoped_latency)."""
+    rows = []
+    any_api_time = False
+    for run in _compact_eligible_runs(summaries, depths):
+        correct, scheduled, _present = _scope_counts(run, depths)
+        tokens = _scope_token_stats(run, depths)
+        scoped = _scope_attempts(run, depths)
+        provider_values = [
+            parsed
+            for attempt in scoped
+            if (parsed := as_decimal(attempt.get("provider_reported_usd"))) is not None
+        ]
+        latency_values = [
+            float(attempt["latency_seconds"])
+            for attempt in scoped
+            if attempt.get("latency_seconds") is not None
+        ]
+        if latency_values:
+            any_api_time = True
+        token_known = tokens["known_token_attempts"]
+        token_attempts = len(scoped)
+        cost_known = len(provider_values)
+        cost_attempts = len(scoped)
+        time_known = len(latency_values)
+        time_attempts = len(scoped)
+        rows.append(
+            {
+                "run": run,
+                "label": _markdown_cell(_compact_model_label(run)),
+                "accuracy": correct / scheduled if scheduled else 0.0,
+                "accuracy_cell": (
+                    f"{correct / scheduled * 100:.1f}%" if scheduled else "—"
+                ),
+                "token_cell": _plain_value_cell(
+                    f"{tokens['total_tokens']:,}", token_known
+                ),
+                "cost_cell": _plain_value_cell(
+                    f"${_sum_decimals(provider_values):.3f}", cost_known
+                ),
+                "time_cell": _plain_value_cell(
+                    _format_seconds(sum(latency_values)), time_known
+                ),
+                "token_partial": token_known < token_attempts,
+                "cost_partial": cost_known < cost_attempts,
+                "time_partial": time_known < time_attempts,
+                "token_known": token_known, "token_attempts": token_attempts,
+                "cost_known": cost_known, "cost_attempts": cost_attempts,
+                "time_known": time_known, "time_attempts": time_attempts,
+            }
+        )
+    rows.sort(key=lambda row: (-row["accuracy"], row["label"].casefold(), str(row["run"].get("run_id") or "")))
+    return rows, any_api_time
+
+
+def _compact_coverage_notes(rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Compact partial-coverage notes for the section under the table."""
+    notes = []
+    for row in rows:
+        parts = []
+        if row["token_partial"]:
+            parts.append(f"tokens {row['token_known']}/{row['token_attempts']}")
+        if row["cost_partial"]:
+            parts.append(f"cost {row['cost_known']}/{row['cost_attempts']}")
+        if row["time_partial"]:
+            parts.append(f"API {row['time_known']}/{row['time_attempts']}")
+        if parts:
+            notes.append(f"{row['label']}: {', '.join(parts)}")
+    return notes
+
+
+def _compact_table(
+    summaries: Sequence[Mapping[str, Any]], depths: Sequence[int] = COMPACT_DEPTHS
+) -> str:
+    """Just the compact table (header + rows), with no surrounding prose."""
+    rows, any_api_time = _compact_rows(summaries, depths)
+    if not rows:
+        return "No complete evaluation runs covering all requested depths found.\n"
+    columns = ["Model", "Accuracy", "Tokens", "Cost"]
+    if any_api_time:
+        columns.append("API time")
+    lines = ["| " + " | ".join(columns) + " |"]
+    lines.append("|---|---:|---:|---:" + ("|---:" if any_api_time else "") + "|")
+    for row in rows:
+        cells = [row["label"], row["accuracy_cell"], row["token_cell"], row["cost_cell"]]
+        if any_api_time:
+            cells.append(row["time_cell"])
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def render_compact_leaderboard(
+    summaries: Sequence[Mapping[str, Any]], depths: Sequence[int] = COMPACT_DEPTHS
+) -> str:
+    """Compact publish leaderboard: scoped depths, accuracy rank, provider cost only."""
+    rows, any_api_time = _compact_rows(summaries, depths)
+    if not rows:
+        return "No complete evaluation runs covering all requested depths found.\n"
+    lines = [
+        "# Prime-eval leaderboard (compact)",
+        "",
+        f"Depths {depths[0]}–{depths[-1]} only, one row per complete run covering every requested depth (a completed parent+extension appears once).",
+        f"Scope: {len(rows)} complete runs; each row uses only that run's scheduled cases within these depths (30 per depth here, 270 per run).",
+        "Accuracy sorts descending; different frozen question sets are not paired comparisons.",
+        "The full in-depth tables (per-depth detail, intervals, routes, retry/truncation reasons) are kept in `analysis.md`.",
+        "The depth graphs remain at depths 4–15 and select their 'best overall' line by highest overall 4–15 accuracy; this compact ranking is computed independently within 7–15 and may disagree.",
+        "",
+        _compact_table(summaries, depths),
+        "",
+    ]
+    coverage = _compact_coverage_notes(rows)
+    if coverage:
+        lines.append("Coverage: " + "; ".join(coverage) + ".")
+        lines.append("")
+    lines.extend(
+        [
+            "Tokens/cost are reported subtotals where usage is missing; not complete bills.",
+            "Accuracy = correct / scheduled cases within the scoped depths (invalid and no-response outcomes count as incorrect).",
+            "Tokens = sum of prompt + completion tokens across every attempt within scope, retries included; reasoning tokens are part of completion. Missing usage is never imputed as zero.",
+            "Cost is the provider-reported USD summed over every attempt within scope, retries included; amounts are shown as reported subtotals when some attempts lack pricing, never estimated as zero or imputed.",
+        ]
+    )
+    if any_api_time:
+        lines.append(
+            "API time = sum of per-attempt request latency within scope (attempt admitted→response/error), retries included; it excludes rate-gate waits, retry backoff delay, and non-request time."
+        )
+    else:
+        lines.append("API time column omitted: no scoped request latency is recorded in any ranked run.")
+    lines.append("Rows reference only attempts whose case depth falls in the scoped range; whole-run aggregates are never used.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def update_readme_leaderboard(readme_path: str | Path, table: str) -> None:
+    """Replace the marked leaderboard section of a README with ``table``.
+
+    Fails loudly when the file is missing or the markers are absent, duplicated,
+    or out of order; the file is never created and nothing is written unless
+    the markers are valid.
+    """
+    path = Path(readme_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"README not found: {path}")
+    text = path.read_text(encoding="utf-8")
+    start_count = text.count(LEADERBOARD_MARK_START)
+    end_count = text.count(LEADERBOARD_MARK_END)
+    if start_count != 1 or end_count != 1:
+        raise ValueError(
+            f"{path} must contain exactly one {LEADERBOARD_MARK_START!r} and one "
+            f"{LEADERBOARD_MARK_END!r} (found {start_count}/{end_count}); nothing written"
+        )
+    start = text.index(LEADERBOARD_MARK_START) + len(LEADERBOARD_MARK_START)
+    end = text.index(LEADERBOARD_MARK_END)
+    if start > end:
+        raise ValueError(f"{path}: start marker must appear before end marker; nothing written")
+    block = "\n\n" + table.strip("\n") + "\n\n"
+    path.write_text(text[:start] + block + text[end:], encoding="utf-8")
+
+
 def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
     if not summaries:
         return "No evaluation runs found.\n"
@@ -421,7 +703,7 @@ def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
         ),
     )
     lines = [
-        "# Prime-eval leaderboard",
+        "# Prime-eval analysis",
         "",
         "All discovered results are listed together; each row is one run (a completed parent+extension is shown once). "
         "Depth coverage, sample counts, and request policy are shown per run. Rankings sort by raw accuracy; runs with different frozen questions are not paired comparisons.",
@@ -722,13 +1004,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("ledgers", nargs="*", help="run JSONL ledgers; defaults to --results-dir")
     parser.add_argument("--results-dir", default="results", help="directory to scan when no ledgers are supplied")
+    parser.add_argument("--format", choices=("compact", "analysis", "in-depth"), default="compact", help="leaderboard style (default: compact); 'analysis' and 'in-depth' are aliases for the detailed per-run tables")
     parser.add_argument("--output", help="also write the Markdown leaderboard to this path")
+    parser.add_argument("--readme", metavar="PATH", help="replace the marked leaderboard section in PATH with the compact table (requires compact format; no mutation unless the markers exist)")
     args = parser.parse_args(argv)
+    if args.readme and args.format != "compact":
+        parser.error("--readme only works with compact format")
     paths = [Path(value) for value in args.ledgers] if args.ledgers else discover_ledgers(args.results_dir)
     if not paths:
         print(f"No evaluation ledgers found in {args.results_dir}")
         return 0
-    text = render_leaderboard(load_summaries(paths))
+    summaries = load_summaries(paths)
+    if args.format == "compact":
+        text = render_compact_leaderboard(summaries)
+    else:
+        text = render_leaderboard(summaries)
+    if args.readme:
+        update_readme_leaderboard(args.readme, _compact_table(summaries))
+        print(f"Updated marked leaderboard section in {args.readme}")
     print(text, end="")
     if args.output:
         output_path = Path(args.output)

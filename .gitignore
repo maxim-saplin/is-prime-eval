@@ -2,6 +2,7 @@
 __pycache__/
 .pytest_cache/
 .env
-results/
 .run-locks/
-.~lock.*#
+.~lock.*
+*.jsonl.lock
+preflight/*.log

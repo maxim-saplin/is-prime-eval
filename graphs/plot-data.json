@@ -1,0 +1,1299 @@
+{
+  "best_run": {
+    "model_id": "google/gemini-4-argon",
+    "reasoning_effort": "high",
+    "run_id": "aa41dde480eb4f38ba1c5f9d46aba3fa"
+  },
+  "runs": [
+    {
+      "model_id": "google/gemini-4-argon",
+      "reasoning_effort": "high",
+      "run_id": "aa41dde480eb4f38ba1c5f9d46aba3fa"
+    },
+    {
+      "model_id": "deepseek/deepseek-v4.1-flash-1017",
+      "reasoning_effort": "low",
+      "run_id": "e2e68e4c+7c21f495"
+    },
+    {
+      "model_id": "deepseek/deepseek-v4.1-flash-1017",
+      "reasoning_effort": "medium",
+      "run_id": "4a29e765+7c21f495"
+    },
+    {
+      "model_id": "deepseek/deepseek-v4.1-flash-1017",
+      "reasoning_effort": "high",
+      "run_id": "59080548+7c21f495"
+    },
+    {
+      "model_id": "openai/gpt-6.1-sol",
+      "reasoning_effort": "medium",
+      "run_id": "8627f7ce+7c21f495"
+    },
+    {
+      "model_id": "anthropic/claude-opus-5.5",
+      "reasoning_effort": "high",
+      "run_id": "eb477281b23443168bbecd63532bc32b"
+    },
+    {
+      "model_id": "openai/gpt-6.1-sol",
+      "reasoning_effort": "low",
+      "run_id": "779db032+7c21f495"
+    },
+    {
+      "model_id": "anthropic/claude-haiku-5.5",
+      "reasoning_effort": "xhigh",
+      "run_id": "dcfbefa8+7c21f495"
+    },
+    {
+      "model_id": "openai/gpt-6-luna",
+      "reasoning_effort": "xhigh",
+      "run_id": "42a1f16f+7c21f495"
+    },
+    {
+      "model_id": "openai/gpt-6-luna",
+      "reasoning_effort": "low",
+      "run_id": "d6842886+7c21f495"
+    },
+    {
+      "model_id": "anthropic/claude-haiku-5.5",
+      "reasoning_effort": "high",
+      "run_id": "812489fb+7c21f495"
+    },
+    {
+      "model_id": "anthropic/claude-haiku-5.5",
+      "reasoning_effort": "medium",
+      "run_id": "78b819ef+7c21f495"
+    },
+    {
+      "model_id": "inception/mercury-3",
+      "reasoning_effort": null,
+      "run_id": "8cba26bf34fd45b8b56c22472b7021be"
+    },
+    {
+      "model_id": "openai/gpt-6-luna",
+      "reasoning_effort": "high",
+      "run_id": "61deca31+7c21f495"
+    },
+    {
+      "model_id": "anthropic/claude-haiku-5.5",
+      "reasoning_effort": "low",
+      "run_id": "746fc055+7c21f495"
+    },
+    {
+      "model_id": "openai/gpt-6-luna",
+      "reasoning_effort": "medium",
+      "run_id": "16ecc6c5+7c21f495"
+    },
+    {
+      "model_id": "openai/gpt-4-turbo",
+      "reasoning_effort": null,
+      "run_id": "e85bb334+7c21f495"
+    }
+  ],
+  "bootstrap_samples": 2000,
+  "bootstrap_seed": 1729,
+  "matplotlib_version": "3.11.2",
+  "token_metric": "Mean final-response completion tokens, including reported reasoning; failed/retry-failure attempts excluded; missing usage excluded, not zero.",
+  "ci_method": "Pointwise 95%: best accuracy Wilson; token means and mean accuracy percentile question bootstrap, class-stratified. Identical per-depth/class question cohorts resampled jointly; distinct cohorts independently (including incidental partial overlap). Fixed run roster; conditional on selecting the winner; no session/model-population inference or multiplicity adjustment.",
+  "source_sha256": {
+    "anthropic-claude-haiku-5.5__effort-high-6ef7c9b15e_20261020T192858Z_f80589ba.jsonl": "048c8146e6b11933f2926416648be4cf0a4d3644cc545e0e1868dda9acf7f5f4",
+    "anthropic-claude-haiku-5.5__effort-high-6ef7c9b15e_20261020T192858Z_f80589ba.manifest.json": "7f369d153561d81289f02cac54de54f39ebc1bcc0f76720ca68e2977b9c0c9e4",
+    "anthropic-claude-haiku-5.5__effort-high-6ef7c9b15e_20261021T091407Z_6267c315.jsonl": "988ff0e43f75ff7b75d955256cd939c6d86d55ab8e38d80687d49e532c2d6151",
+    "anthropic-claude-haiku-5.5__effort-high-6ef7c9b15e_20261021T091407Z_6267c315.manifest.json": "aa74a90eaff90a7dcd29ad10d80cea923d94233d81889d78ea5d9eba1763e94a",
+    "anthropic-claude-haiku-5.5__effort-low-6c1ff09db3_20261020T190420Z_59f31661.jsonl": "d361cf23f2d885ce0986a0004e9a10c1b377a0dc28d1086ec4062e7dae1f6648",
+    "anthropic-claude-haiku-5.5__effort-low-6c1ff09db3_20261020T190420Z_59f31661.manifest.json": "01f139a7f2559665ef832356503eea644a4ac287db0a2d4435ab5eb8f70baeda",
+    "anthropic-claude-haiku-5.5__effort-low-6c1ff09db3_20261021T091407Z_e8db42e9.jsonl": "9e38d2891553f931823bf3784c97671faa5f3a15b24bd3bfd7a51f801992a3d1",
+    "anthropic-claude-haiku-5.5__effort-low-6c1ff09db3_20261021T091407Z_e8db42e9.manifest.json": "675b5c235ebe7f30ed57f45b28282b2235afdce2038fdc1f69385413f539b550",
+    "anthropic-claude-haiku-5.5__effort-medium-c082456a77_20261020T191954Z_5d54aa7e.jsonl": "bae5aa38e00c3a1ecbcbbf99f80b5c0c5808b56ef90091566ca5bed491ff3790",
+    "anthropic-claude-haiku-5.5__effort-medium-c082456a77_20261020T191954Z_5d54aa7e.manifest.json": "9d899bd1fa41853f8ab6d24f93c3a0b1c4376fed09098430bdb5ca958d5a1941",
+    "anthropic-claude-haiku-5.5__effort-medium-c082456a77_20261021T091407Z_eceffc82.jsonl": "ffeac459ada1de9ad52998b694b0619de4aceb72071cb61ebdccdea61c6fc832",
+    "anthropic-claude-haiku-5.5__effort-medium-c082456a77_20261021T091407Z_eceffc82.manifest.json": "1d0a3acf170a07a11ee9df6232226de4d940f7a5058a4baeacd2a1fa5c30e746",
+    "anthropic-claude-haiku-5.5__effort-xhigh-b5255978be_20261020T193931Z_f2558f61.jsonl": "1609fd841f7da4e46e2b9014f2d0f60358fc3b0393c16a8bbb7032270cc79155",
+    "anthropic-claude-haiku-5.5__effort-xhigh-b5255978be_20261020T193931Z_f2558f61.manifest.json": "283b5ac5d275ac9e42be291b0c4fcd96c616560b70c3e35acddf33f872862334",
+    "anthropic-claude-haiku-5.5__effort-xhigh-b5255978be_20261021T095245Z_08c76b85.jsonl": "1126d7082510b985b54463353dce524ebf75b35c57e89475b7d8bf42e12fdfe9",
+    "anthropic-claude-haiku-5.5__effort-xhigh-b5255978be_20261021T095245Z_08c76b85.manifest.json": "8fcb95c39753494ffc009a9095e0cd9e97a3983ce0301efa4695af08da5ecb3f",
+    "anthropic-claude-opus-5.5__effort-high-6ef7c9b15e_20261021T124250Z_714fe032.jsonl": "36083c0f3eed7f89a296b6d343a1f8f7455ddace475da0945107c8e110431e83",
+    "anthropic-claude-opus-5.5__effort-high-6ef7c9b15e_20261021T124250Z_714fe032.manifest.json": "4dbc296b97748ed1d2ed775ce092ed145b70b89b0e0f5efce7530b3d7480df26",
+    "datasets/prime-v1-031c35827576c3f9.json": "9fa15a9f45f22039b91e983ff7b7517d4adac5ffd16ad8fa9ab7d8cefef3c375",
+    "datasets/prime-v1-3792872e5d995499.json": "32efe68856fa2d65790627af0d97b1616835fea469eb9e695773e23328e15086",
+    "datasets/prime-v1-38a18b8509bd9202.json": "9e442edf443fed3c8d867db0edc5d5d8b8c455f5591ec3730321c89f44edeafd",
+    "datasets/prime-v1-c876fabfc98c4744.json": "00b07709bb0a130d540fb4031120792a163354022896175e7c4fd792f5b589c8",
+    "datasets/prime-v1-fc48a8ff5cee2be5.json": "4e4fd21d08a5538c985a3f489a47f15e960adc55adc1c074595c56ba393646db",
+    "deepseek-deepseek-v4.1-flash-1017__effort-high-6ef7c9b15e_20261020T181535Z_368368ea.jsonl": "245a8181034e1f777c8cf0a268c8042c6392fb866c47636265007490d78bc985",
+    "deepseek-deepseek-v4.1-flash-1017__effort-high-6ef7c9b15e_20261020T181535Z_368368ea.manifest.json": "c3cd66985841f8218d7f24045f5c6a8b8469a2b9673927374e171b0a19f83d9f",
+    "deepseek-deepseek-v4.1-flash-1017__effort-high-6ef7c9b15e_20261021T095727Z_d2a3fae1.jsonl": "4aafe4143cda4feaf1e2518e8f43416586e08551cccaa67a49731372211cd80a",
+    "deepseek-deepseek-v4.1-flash-1017__effort-high-6ef7c9b15e_20261021T095727Z_d2a3fae1.manifest.json": "4adb11318522357a5d6a5e3f9232ea88d5e3f45fdd0ef1742e5e72a9fa819a25",
+    "deepseek-deepseek-v4.1-flash-1017__effort-low-6c1ff09db3_20261020T163120Z_2394f1e6.jsonl": "7f11cedbcf828dfffa864e7fc3bdf218e87b5f84fe3d2ae5efa508c3a6f848d1",
+    "deepseek-deepseek-v4.1-flash-1017__effort-low-6c1ff09db3_20261020T163120Z_2394f1e6.manifest.json": "2f1946db8e9db6ebc2dbc45fcee0ebfe547388b533b629bbeb1ca8ee4e9c2699",
+    "deepseek-deepseek-v4.1-flash-1017__effort-low-6c1ff09db3_20261021T100604Z_7ff411a2.jsonl": "621e062994eb35047274957d6c84a612fe6a4080b7fad9c407e2363686663820",
+    "deepseek-deepseek-v4.1-flash-1017__effort-low-6c1ff09db3_20261021T100604Z_7ff411a2.manifest.json": "33f3f6f5ae9e3e0b7d9a70e322cdd9554a12a16426ebc8d889c6cea419ec2205",
+    "deepseek-deepseek-v4.1-flash-1017__effort-medium-c082456a77_20261020T170128Z_d282850a.jsonl": "5b17fc414a91310da312584edd9a4461200368a2813858d99b3edfb7ec3fb414",
+    "deepseek-deepseek-v4.1-flash-1017__effort-medium-c082456a77_20261020T170128Z_d282850a.manifest.json": "07d6902a7afc7633dd40d7f93719ff48d69a87a01cd4056908833bab9cd9e398",
+    "deepseek-deepseek-v4.1-flash-1017__effort-medium-c082456a77_20261021T124458Z_4d465eb5.jsonl": "a8d1a5f1c8100d5d5bf18efad52e5f96424e7bd3fa9928d3464f1edf02d63f85",
+    "deepseek-deepseek-v4.1-flash-1017__effort-medium-c082456a77_20261021T124458Z_4d465eb5.manifest.json": "b90c1cd276e7b7c68bef7b7d276e38852c96647316fb4e349fdad974c876d575",
+    "extension-batch-7c21f4951232d813f132.json": "6baf269908d65b3a3e56ae27e9dad22d15f108fe961e0cf7876351c28d249251",
+    "google-gemini-4-argon__effort-high-6ef7c9b15e_20261021T125615Z_26d0cfed.jsonl": "6d368d5e374046aca0beab62b6cddc704811d51236edb765bda2ad9c8b355f63",
+    "google-gemini-4-argon__effort-high-6ef7c9b15e_20261021T125615Z_26d0cfed.manifest.json": "b49ae73c1a8700575786cfa86c974826c524560f75e6973b55147f2e98e53340",
+    "inception-mercury-3__effort-omitted-74234e98af_20261021T102216Z_98fb31fb.jsonl": "185f761bfdda4e945e9453c2d240a94e0cd50e10eaf8944dafd6190ac2e84d7c",
+    "inception-mercury-3__effort-omitted-74234e98af_20261021T102216Z_98fb31fb.manifest.json": "cb28b2bf30ca5a9dbaff341714be5a28e59af63beacd4e02bdaca05725916f22",
+    "openai-gpt-4-turbo__effort-omitted-74234e98af_20261020T213054Z_abdc61ca.jsonl": "7541696c2459b79d229f30f30d8a08757806a85de8f2453b5a6eaa3c46d19824",
+    "openai-gpt-4-turbo__effort-omitted-74234e98af_20261020T213054Z_abdc61ca.manifest.json": "7c7f799f64a3a5df9eebb2822506a84da6b8afb4ca0341224e21b8ea96214011",
+    "openai-gpt-4-turbo__effort-omitted-74234e98af_20261021T193205Z_421f15f6.jsonl": "0a1cb33d2bba3f744ad715a49b094596dfb0e20023b48af1e02efccd7070b91a",
+    "openai-gpt-4-turbo__effort-omitted-74234e98af_20261021T193205Z_421f15f6.manifest.json": "b0fdcf7b79e9429f46c2327dd835a05d1d1180a3741ac429cfad87c25eca444a",
+    "openai-gpt-6-luna__effort-high-6ef7c9b15e_20261020T154137Z_6327b4cb.jsonl": "8bbae972efcbfa9074824fdde67ece47af41617db864b1b616f55e85d7d5fb4b",
+    "openai-gpt-6-luna__effort-high-6ef7c9b15e_20261020T154137Z_6327b4cb.manifest.json": "0ea2d10b5e77a666832c5d63ac02e0ebff2f10b86b76bfdf06d169acaaa86bf9",
+    "openai-gpt-6-luna__effort-high-6ef7c9b15e_20261021T194724Z_8eb759dd.jsonl": "6a11cd4153bb8fc467e76d82ed5e26801da47550c882daf061cf729e6a40c2e1",
+    "openai-gpt-6-luna__effort-high-6ef7c9b15e_20261021T194724Z_8eb759dd.manifest.json": "d7f17098743b8a391e4cca4f67e87190fe04751235fa0b7608f8eefaf20d55cf",
+    "openai-gpt-6-luna__effort-low-6c1ff09db3_20261020T154137Z_3bcadd33.jsonl": "703943fb76cde71f9575780a71fb2cee54188fec946d90196e36aa3dfdf9f6ff",
+    "openai-gpt-6-luna__effort-low-6c1ff09db3_20261020T154137Z_3bcadd33.manifest.json": "0965d0e920a8dc99890c0a92947263fed7e34c23f519c751b6f8b5bd641da479",
+    "openai-gpt-6-luna__effort-low-6c1ff09db3_20261021T212750Z_679ddee1.jsonl": "8c71f25fda399b2dbcc14f6e84d024ebed22784910f3c2298372567233191810",
+    "openai-gpt-6-luna__effort-low-6c1ff09db3_20261021T212750Z_679ddee1.manifest.json": "abb5150ae0b84fb09fdd025e645ddec00d4b06c7e3278cc759c7f705826a0bdc",
+    "openai-gpt-6-luna__effort-medium-c082456a77_20261020T154137Z_8ab012e0.jsonl": "8fa6ed0221efcc3f0217ca21a1ce72cb36836f31f73e440cdd7a2ef954f13495",
+    "openai-gpt-6-luna__effort-medium-c082456a77_20261020T154137Z_8ab012e0.manifest.json": "af2c4b3c969a490ba59b2b0330555b2109bc4bad45b9fbe3a8418471e65f33ee",
+    "openai-gpt-6-luna__effort-medium-c082456a77_20261021T214607Z_dd389776.jsonl": "2bbd686290eb4132cd6dbdbf657a8b3cf1f3f2a2978de8b9c67e431a31422c34",
+    "openai-gpt-6-luna__effort-medium-c082456a77_20261021T214607Z_dd389776.manifest.json": "1d2b51f56eb6ee5b46f10173d0a4c844b4a6adc00bff804fad3feb2502d28677",
+    "openai-gpt-6-luna__effort-xhigh-b5255978be_20261020T161108Z_9d5beb06.jsonl": "aa44c0f4bd8476b183445587893708f92cc4bfd10e8673efef3f12af69658a94",
+    "openai-gpt-6-luna__effort-xhigh-b5255978be_20261020T161108Z_9d5beb06.manifest.json": "652c962a54877cb7ec7e4e2604df346dfa8be5e69508186cd107f9b76523c9b2",
+    "openai-gpt-6-luna__effort-xhigh-b5255978be_20261021T221605Z_f6ba2933.jsonl": "c3aff417ac11d95dcddfe5530a1a0d192eaf1c182f62c35f82aca9085312afce",
+    "openai-gpt-6-luna__effort-xhigh-b5255978be_20261021T221605Z_f6ba2933.manifest.json": "5eef8b83f8784b3e876ab5a46822654b7337af73ab655a0b8be6402085ec1de7",
+    "openai-gpt-6.1-sol__effort-low-6c1ff09db3_20261020T195414Z_5c8b0f50.jsonl": "ae2f858a1f826a44db94e3e8138e86cc90a415254ebdea380bafcf23deb02f7e",
+    "openai-gpt-6.1-sol__effort-low-6c1ff09db3_20261020T195414Z_5c8b0f50.manifest.json": "7d04ea5c7c7b83f524d245a017b8ceb7e0191c1563bad422a66b5b1e09b53a47",
+    "openai-gpt-6.1-sol__effort-low-6c1ff09db3_20261021T222436Z_b8018a1c.jsonl": "de25045dd2492dbe79589e42b741a3f12a03ffbee4ef263015f309ff6c8ef879",
+    "openai-gpt-6.1-sol__effort-low-6c1ff09db3_20261021T222436Z_b8018a1c.manifest.json": "3cea4dada7298fe42b1550792a071c07c4a165cb5ffa427b3b77c86d32a13936",
+    "openai-gpt-6.1-sol__effort-medium-c082456a77_20261020T205845Z_b99c4123.jsonl": "ce18084e7277f4eafd50016152f3f053665506bea5825dea097e1c7a8e547868",
+    "openai-gpt-6.1-sol__effort-medium-c082456a77_20261020T205845Z_b99c4123.manifest.json": "fabc6e075eae701a91e47b897aa230171beaef72a2b2664cc58a0bfe82299cc6",
+    "openai-gpt-6.1-sol__effort-medium-c082456a77_20261021T231554Z_6d962acf.jsonl": "bd9077c87a2e71976e5a363a051699a92922b2932bdd85dc5557ac0ed8f118da",
+    "openai-gpt-6.1-sol__effort-medium-c082456a77_20261021T231554Z_6d962acf.manifest.json": "3becfd7060d67d440a2ddec9fd1e610ea312b1b226e5559894be39fdd045b38c"
+  },
+  "points": [
+    {
+      "depth": 4,
+      "best_accuracy": 1.0,
+      "best_accuracy_ci": [
+        0.8864866068260312,
+        1.0
+      ],
+      "average_accuracy": 0.9509803921568628,
+      "average_accuracy_ci": [
+        0.9392156862745098,
+        0.9627450980392157
+      ],
+      "best_tokens": 756.4,
+      "best_tokens_ci": [
+        615.1508333333333,
+        912.263333333333
+      ],
+      "average_tokens": 195.41764705882352,
+      "average_tokens_ci": [
+        176.1825980392157,
+        215.5002450980392
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 5,
+      "best_accuracy": 1.0,
+      "best_accuracy_ci": [
+        0.8864866068260312,
+        1.0
+      ],
+      "average_accuracy": 0.9568627450980391,
+      "average_accuracy_ci": [
+        0.9470588235294118,
+        0.9666666666666667
+      ],
+      "best_tokens": 2491.1666666666665,
+      "best_tokens_ci": [
+        2132.7633333333333,
+        2834.6091666666666
+      ],
+      "average_tokens": 778.2980392156862,
+      "average_tokens_ci": [
+        678.0987745098039,
+        873.5833823529412
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 6,
+      "best_accuracy": 1.0,
+      "best_accuracy_ci": [
+        0.8864866068260312,
+        1.0
+      ],
+      "average_accuracy": 0.9470588235294118,
+      "average_accuracy_ci": [
+        0.9333333333333333,
+        0.9588235294117647
+      ],
+      "best_tokens": 7293.733333333334,
+      "best_tokens_ci": [
+        6475.336666666667,
+        8151.098333333333
+      ],
+      "average_tokens": 2475.866666666667,
+      "average_tokens_ci": [
+        2204.8492156862744,
+        2752.3518627450976
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 7,
+      "best_accuracy": 1.0,
+      "best_accuracy_ci": [
+        0.8864866068260312,
+        1.0
+      ],
+      "average_accuracy": 0.8686274509803922,
+      "average_accuracy_ci": [
+        0.8392156862745097,
+        0.8941176470588236
+      ],
+      "best_tokens": 14598.366666666667,
+      "best_tokens_ci": [
+        12376.15,
+        16874.869166666667
+      ],
+      "average_tokens": 5463.160784313725,
+      "average_tokens_ci": [
+        4969.153088235294,
+        5974.970539215686
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 8,
+      "best_accuracy": 0.9666666666666667,
+      "best_accuracy_ci": [
+        0.8332960900859082,
+        0.9940914096183874
+      ],
+      "average_accuracy": 0.8294117647058823,
+      "average_accuracy_ci": [
+        0.8058823529411764,
+        0.8568627450980392
+      ],
+      "best_tokens": 16675.0,
+      "best_tokens_ci": [
+        13478.350833333334,
+        20036.228333333333
+      ],
+      "average_tokens": 10216.715686274509,
+      "average_tokens_ci": [
+        9556.99637254902,
+        10869.62068627451
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 9,
+      "best_accuracy": 0.9,
+      "best_accuracy_ci": [
+        0.7437891742081593,
+        0.9654001112526658
+      ],
+      "average_accuracy": 0.7509803921568627,
+      "average_accuracy_ci": [
+        0.7274509803921569,
+        0.7725490196078431
+      ],
+      "best_tokens": 17167.689655172413,
+      "best_tokens_ci": [
+        13756.283829365078,
+        20985.279166666664
+      ],
+      "average_tokens": 12461.287626774849,
+      "average_tokens_ci": [
+        11710.225045638945,
+        13229.97030812325
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 29,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 10,
+      "best_accuracy": 0.9333333333333333,
+      "best_accuracy_ci": [
+        0.7867654163738308,
+        0.9815229762087295
+      ],
+      "average_accuracy": 0.6784313725490196,
+      "average_accuracy_ci": [
+        0.6470098039215687,
+        0.7058823529411765
+      ],
+      "best_tokens": 14648.733333333334,
+      "best_tokens_ci": [
+        10613.07,
+        19404.715833333332
+      ],
+      "average_tokens": 13539.256862745098,
+      "average_tokens_ci": [
+        11918.896862745098,
+        15456.247794117646
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 11,
+      "best_accuracy": 0.9333333333333333,
+      "best_accuracy_ci": [
+        0.7867654163738308,
+        0.9815229762087295
+      ],
+      "average_accuracy": 0.6686274509803922,
+      "average_accuracy_ci": [
+        0.6431372549019608,
+        0.692156862745098
+      ],
+      "best_tokens": 14660.275862068966,
+      "best_tokens_ci": [
+        11649.921825396825,
+        18317.06859195402
+      ],
+      "average_tokens": 12718.226031102096,
+      "average_tokens_ci": [
+        11535.071619337388,
+        13893.137401960785
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 29,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 12,
+      "best_accuracy": 0.9666666666666667,
+      "best_accuracy_ci": [
+        0.8332960900859082,
+        0.9940914096183874
+      ],
+      "average_accuracy": 0.6431372549019608,
+      "average_accuracy_ci": [
+        0.6254901960784314,
+        0.6607843137254903
+      ],
+      "best_tokens": 13506.533333333333,
+      "best_tokens_ci": [
+        10722.049166666666,
+        16902.918333333335
+      ],
+      "average_tokens": 13084.03137254902,
+      "average_tokens_ci": [
+        12415.275049019609,
+        13810.383333333333
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 13,
+      "best_accuracy": 0.8,
+      "best_accuracy_ci": [
+        0.6269430358685175,
+        0.9049489282271013
+      ],
+      "average_accuracy": 0.611764705882353,
+      "average_accuracy_ci": [
+        0.5784313725490197,
+        0.6411764705882353
+      ],
+      "best_tokens": 14018.0,
+      "best_tokens_ci": [
+        9779.549692118226,
+        18796.119137931033
+      ],
+      "average_tokens": 13992.033333333333,
+      "average_tokens_ci": [
+        12582.558728307415,
+        15728.264950980387
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 29,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 14,
+      "best_accuracy": 0.9,
+      "best_accuracy_ci": [
+        0.7437891742081593,
+        0.9654001112526658
+      ],
+      "average_accuracy": 0.6274509803921569,
+      "average_accuracy_ci": [
+        0.607843137254902,
+        0.6470588235294118
+      ],
+      "best_tokens": 10748.48275862069,
+      "best_tokens_ci": [
+        8315.07875,
+        13229.146379310343
+      ],
+      "average_tokens": 11295.38918187965,
+      "average_tokens_ci": [
+        10554.357209653092,
+        12101.681937119674
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 29,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    },
+    {
+      "depth": 15,
+      "best_accuracy": 0.8,
+      "best_accuracy_ci": [
+        0.6269430358685175,
+        0.9049489282271013
+      ],
+      "average_accuracy": 0.6196078431372549,
+      "average_accuracy_ci": [
+        0.6,
+        0.6411764705882353
+      ],
+      "best_tokens": 13100.433333333332,
+      "best_tokens_ci": [
+        9727.103333333333,
+        17424.501666666667
+      ],
+      "average_tokens": 11898.74705882353,
+      "average_tokens_ci": [
+        10846.211666666666,
+        12965.34088235294
+      ],
+      "token_runs_with_usage": 17,
+      "usage_coverage": [
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        },
+        {
+          "known_final_responses": 30,
+          "scheduled_cases": 30
+        }
+      ]
+    }
+  ]
+}

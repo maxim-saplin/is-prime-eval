@@ -17,7 +17,7 @@ from events import ledger_lock, load_events
 from model_specs import ModelSpec
 from multi_run import ModelRunSpec
 from openrouter import ModelInfo
-from report import summarize_run
+from scripts.report import summarize_run
 from runner import (
     PreparedDataset,
     RunConfig,

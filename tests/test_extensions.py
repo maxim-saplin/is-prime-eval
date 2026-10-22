@@ -14,7 +14,7 @@ from cases import PRIME, COMPOSITE, is_prime
 from extensions import load_extension_parents, prepare_extension_plan
 from multi_run import run_many
 from openrouter import ModelInfo
-from report import load_summaries, render_leaderboard
+from scripts.report import load_summaries, render_leaderboard
 from runner import RunConfig, run_new
 
 

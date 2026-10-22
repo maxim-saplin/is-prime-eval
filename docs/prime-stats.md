@@ -26,8 +26,8 @@ For a band `[L, U]`, the count is `π(U) − π(L − 1)`, where `π(x)` counts
 primes less than or equal to `x`. The percentage is `100 × count / (U − L + 1)`.
 No individual primes are enumerated or saved.
 
-Regenerate from the repository directory:
+Regenerate from the repository root:
 
 ```sh
-.venv/bin/python prime_stats.py
+.venv/bin/python scripts/prime_stats.py
 ```

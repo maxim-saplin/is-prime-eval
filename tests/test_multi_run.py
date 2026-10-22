@@ -16,7 +16,7 @@ from multi_run import ModelRunSpec, run_many
 from openrouter import ModelInfo
 from progress import ProgressReporter
 from request_gate import AccountRequestGate
-from report import summarize_run
+from scripts.report import summarize_run
 from runner import RunConfig
 
 

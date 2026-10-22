@@ -14,7 +14,7 @@ from uuid import uuid4
 from cases import is_prime
 from extensions import load_extension_parents
 from openrouter import ModelInfo
-from report import load_summaries, render_leaderboard
+from scripts.report import load_summaries, render_leaderboard
 from request_gate import AccountRequestGate
 from runner import RunConfig, run_new
 
