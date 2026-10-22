@@ -1,7 +1,7 @@
 from dataclasses import FrozenInstanceError
 import unittest
 
-from model_specs import ModelSpec, parse_model_specs
+from is_prime_eval.model_specs import ModelSpec, parse_model_specs
 
 
 class ParseModelSpecsTests(unittest.TestCase):

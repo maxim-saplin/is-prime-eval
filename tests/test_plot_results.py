@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.plot_results import DEPTHS, depth_statistics, draw_graphs, observations, select_runs
+from is_prime_eval.plot_results import DEPTHS, depth_statistics, draw_graphs, observations, select_runs
 
 
 def cases(prefix, correct, tokens):

@@ -11,12 +11,12 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-from cases import is_prime
-from extensions import load_extension_parents
-from openrouter import ModelInfo
-from scripts.report import load_summaries, render_leaderboard
-from request_gate import AccountRequestGate
-from runner import RunConfig, run_new
+from is_prime_eval.cases import is_prime
+from is_prime_eval.extensions import load_extension_parents
+from is_prime_eval.openrouter import ModelInfo
+from is_prime_eval.report import load_summaries, render_leaderboard
+from is_prime_eval.request_gate import AccountRequestGate
+from is_prime_eval.runner import RunConfig, run_new
 
 
 PAIRS = [
@@ -83,7 +83,7 @@ class FakeAdapter:
 
 class Full14ExtensionCliTests(unittest.TestCase):
     def test_exact_14_pair_cli_runs_3080_fake_cases_then_resumes_without_dispatch(self):
-        import run
+        import is_prime_eval.cli as run
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "results"
@@ -144,10 +144,10 @@ class Full14ExtensionCliTests(unittest.TestCase):
 
             def invoke():
                 with (
-                    patch("run.OpenRouterClient", FakeAdapter),
-                    patch("run.AccountRequestGate", lambda _interval: AccountRequestGate(0.001)),
-                    patch("run.load_dotenv"),
-                    patch("run.get_openrouter_key", return_value="offline-only"),
+                    patch("is_prime_eval.cli.OpenRouterClient", FakeAdapter),
+                    patch("is_prime_eval.cli.AccountRequestGate", lambda _interval: AccountRequestGate(0.001)),
+                    patch("is_prime_eval.cli.load_dotenv"),
+                    patch("is_prime_eval.cli.get_openrouter_key", return_value="offline-only"),
                     redirect_stdout(io.StringIO()),
                     redirect_stderr(io.StringIO()),
                 ):

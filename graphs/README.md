@@ -44,7 +44,7 @@ Both graphs have exactly two lines and gray pointwise 95% confidence bands:
 
 `plot-data.json` contains plotted values, interval endpoints, coverage, run IDs,
 CI settings, Matplotlib version and source artifact SHA-256 hashes. It is generated from JSONL
-ledgers/manifests through `scripts/report.py`, never by parsing or hand-editing
+ledgers/manifests through `is_prime_eval.report`, never by parsing or hand-editing
 Markdown files.
 
 ## Regenerate, without model/API calls
@@ -52,8 +52,8 @@ Markdown files.
 From the repository root:
 
 ```sh
-.venv/bin/python -m pip install -r requirements-plots.txt
-.venv/bin/python scripts/plot_results.py
+.venv/bin/python -m pip install -e '.[plots]'
+.venv/bin/is-prime-plot
 ```
 
 Optional: `--results-dir`, `--output-dir`, `--bootstrap-samples`,

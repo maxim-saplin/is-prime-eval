@@ -1,4 +1,4 @@
-name: Offline tests
+name: Offline tests and package
 
 on:
   push:
@@ -18,5 +18,32 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install -r requirements-plots.txt
+      - run: python -m pip install -e '.[plots]'
       - run: python -m unittest discover -s tests -v
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install build
+      - run: python -m build
+      - name: Verify the installed wheel outside the checkout
+        shell: bash
+        run: |
+          python -m venv /tmp/is-prime-wheel
+          /tmp/is-prime-wheel/bin/python -m pip install dist/*.whl
+          cd "$(mktemp -d)"
+          /tmp/is-prime-wheel/bin/python -m is_prime_eval --help
+          for cli in is-prime-eval is-prime-report is-prime-plot is-prime-enrich; do
+            /tmp/is-prime-wheel/bin/"$cli" --help
+          done
+          /tmp/is-prime-wheel/bin/is-prime-report \
+            --results-dir "$GITHUB_WORKSPACE/results" --output leaderboard.md
+          cmp leaderboard.md "$GITHUB_WORKSPACE/leaderboard.md"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/*

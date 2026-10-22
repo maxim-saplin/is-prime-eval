@@ -6,3 +6,6 @@ __pycache__/
 .~lock.*
 *.jsonl.lock
 preflight/*.log
+build/
+dist/
+*.egg-info/

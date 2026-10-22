@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cases import is_prime
-from scripts.enrich_generations import enrich_ledger
-from openrouter import ModelInfo
-from scripts.report import summarize_run
-from runner import RunConfig, run_new
+from is_prime_eval.cases import is_prime
+from is_prime_eval.enrich_generations import enrich_ledger
+from is_prime_eval.openrouter import ModelInfo
+from is_prime_eval.report import summarize_run
+from is_prime_eval.runner import RunConfig, run_new
 
 
 class DirectCompletionClient:

@@ -7,12 +7,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import runner as runner_module
-from cases import is_prime
-from openrouter import ModelInfo, OpenRouterError
-from progress import ProgressReporter
-from scripts.report import render_leaderboard, summarize_run
-from runner import RunConfig, _new_ledger_path, resume_run, run_new
+import is_prime_eval.runner as runner_module
+from is_prime_eval.cases import is_prime
+from is_prime_eval.openrouter import ModelInfo, OpenRouterError
+from is_prime_eval.progress import ProgressReporter
+from is_prime_eval.report import render_leaderboard, summarize_run
+from is_prime_eval.runner import RunConfig, _new_ledger_path, resume_run, run_new
 
 
 class FakeClient:
@@ -336,7 +336,7 @@ class RunnerTests(unittest.TestCase):
             resume_run(client=FakeClient(), ledger_path=result["ledger_path"])
 
     def test_default_retry_budget_is_five_retries_six_total_attempts(self):
-        from runner import DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_RETRIES
+        from is_prime_eval.runner import DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_RETRIES
 
         self.assertEqual(DEFAULT_MAX_RETRIES, 5)
         self.assertEqual(DEFAULT_MAX_ATTEMPTS, 6)
@@ -351,8 +351,8 @@ class RunnerTests(unittest.TestCase):
             }
         )
         with (
-            patch("runner.random.uniform", side_effect=lambda _low, high: high),
-            patch("runner.time.sleep") as sleep,
+            patch("is_prime_eval.runner.random.uniform", side_effect=lambda _low, high: high),
+            patch("is_prime_eval.runner.time.sleep") as sleep,
         ):
             result = run_new(
                 client=client,
@@ -495,7 +495,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(summary["provider_cost_known_attempts"], 2)
 
     def test_cost_update_replaces_attempt_cost_instead_of_double_counting(self):
-        from events import append_event
+        from is_prime_eval.events import append_event
 
         client = FakeClient()
         result = run_new(

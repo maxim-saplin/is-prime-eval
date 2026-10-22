@@ -5,7 +5,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from progress import ProgressReporter, _cost_lines
+from is_prime_eval.progress import ProgressReporter, _cost_lines
 
 
 class TTYStringIO(io.StringIO):
@@ -139,7 +139,7 @@ class ProgressReporterTests(unittest.TestCase):
     def test_many_parallel_models_stay_within_a_24_row_tty_viewport(self):
         output = TTYStringIO()
         reporter = ProgressReporter(stream=output, force_tty=True)
-        with patch("progress.shutil.get_terminal_size", return_value=os.terminal_size((80, 24))):
+        with patch("is_prime_eval.progress.shutil.get_terminal_size", return_value=os.terminal_size((80, 24))):
             reporter.set_active_model_limit(4)
             reporter.set_batch_total(13)
             self.assertEqual(reporter._rendered_lines, 19)
@@ -224,7 +224,7 @@ class ProgressReporterTests(unittest.TestCase):
     def test_80_column_cancellation_header_and_every_tty_row_stay_within_width(self):
         output = TTYStringIO()
         reporter = ProgressReporter(stream=output, force_tty=True)
-        with patch("progress.shutil.get_terminal_size", return_value=os.terminal_size((80, 24))):
+        with patch("is_prime_eval.progress.shutil.get_terminal_size", return_value=os.terminal_size((80, 24))):
             reporter.set_batch_total(1)
             reporter.register_model("openai/gpt-6-luna", "custom-effort", 140)
             reporter.set_batch_status("cancel requested; no new dispatch")

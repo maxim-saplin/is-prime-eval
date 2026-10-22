@@ -1,7 +1,7 @@
 import unittest
 from decimal import Decimal
 
-from costs import (
+from is_prime_eval.costs import (
     attempt_costs_from_events,
     estimate_uncached_cost_usd,
     extract_provider_cost_usd,

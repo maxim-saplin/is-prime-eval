@@ -1,7 +1,7 @@
 from collections import Counter
 import unittest
 
-from cases import (
+from is_prime_eval.cases import (
     CASE_GENERATOR_VERSION,
     Case,
     COMPOSITE,
@@ -115,7 +115,7 @@ class CaseGenerationTests(unittest.TestCase):
         )
 
     def test_extension_generation_preserves_seeded_depth_4_to_10_cases_and_hash(self):
-        from runner import _case_record, _sha256
+        from is_prime_eval.runner import _case_record, _sha256
 
         base_depths = tuple(range(4, 11))
         target_depths = tuple(range(4, 16))

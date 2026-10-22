@@ -1,0 +1,8 @@
+# Distributions contain the library/CLIs; benchmark artifacts and repo-only
+# utilities/tests stay in the checkout rather than the installable package.
+prune tests
+prune results
+prune graphs
+prune docs
+prune scripts
+global-exclude __pycache__ *.py[cod] .env

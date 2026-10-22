@@ -2,8 +2,8 @@
 """Generate exact prime counts for 4–15 digit integers in docs/prime-stats.md.
 
 Setup and run from the repository root:
-    uv venv .venv
-    uv pip install --python .venv/bin/python -r requirements.txt
+    python3 -m venv .venv
+    .venv/bin/python -m pip install -e '.[stats]'
     .venv/bin/python scripts/prime_stats.py
 
 Uses libprimecount through primecountpy; does not enumerate or store primes.

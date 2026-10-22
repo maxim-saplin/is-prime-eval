@@ -10,12 +10,12 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from cases import PRIME, COMPOSITE, is_prime
-from extensions import load_extension_parents, prepare_extension_plan
-from multi_run import run_many
-from openrouter import ModelInfo
-from scripts.report import load_summaries, render_leaderboard
-from runner import RunConfig, run_new
+from is_prime_eval.cases import PRIME, COMPOSITE, is_prime
+from is_prime_eval.extensions import load_extension_parents, prepare_extension_plan
+from is_prime_eval.multi_run import run_many
+from is_prime_eval.openrouter import ModelInfo
+from is_prime_eval.report import load_summaries, render_leaderboard
+from is_prime_eval.runner import RunConfig, run_new
 
 
 class FakeClient:
@@ -195,7 +195,7 @@ class ExtensionIntegrationTests(unittest.TestCase):
         self._assert_parent_hashes_unchanged()
 
     def test_cli_dry_run_uses_explicit_parents_without_dispatch(self):
-        import run
+        import is_prime_eval.cli as run
 
         class FakeCatalog:
             def __init__(self, _api_key, *, timeout):
@@ -210,10 +210,10 @@ class ExtensionIntegrationTests(unittest.TestCase):
 
         output = io.StringIO()
         with (
-            patch("run.OpenRouterClient", FakeCatalog),
-            patch("run.run_many", side_effect=AssertionError("dry-run must not dispatch")),
-            patch("run.load_dotenv"),
-            patch("run.get_openrouter_key", return_value="offline-test-key"),
+            patch("is_prime_eval.cli.OpenRouterClient", FakeCatalog),
+            patch("is_prime_eval.cli.run_many", side_effect=AssertionError("dry-run must not dispatch")),
+            patch("is_prime_eval.cli.load_dotenv"),
+            patch("is_prime_eval.cli.get_openrouter_key", return_value="offline-test-key"),
             redirect_stdout(output),
             redirect_stderr(io.StringIO()),
         ):

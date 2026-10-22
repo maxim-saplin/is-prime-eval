@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from costs import as_decimal
+from .costs import as_decimal
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 

@@ -6,7 +6,7 @@ import os
 import re
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+WORKSPACE_ROOT = Path.cwd()
 _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -17,7 +17,7 @@ def load_dotenv(path: str | Path | None = None, *, override: bool = False) -> bo
     intentionally not a shell parser; it supports the project's `.env` format.
     Returns whether the file existed. Secret values are never printed.
     """
-    env_path = Path(path) if path is not None else PROJECT_ROOT / ".env"
+    env_path = Path(path) if path is not None else WORKSPACE_ROOT / ".env"
     if not env_path.is_file():
         return False
 

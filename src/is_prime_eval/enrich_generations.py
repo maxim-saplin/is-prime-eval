@@ -4,21 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-# Allow running as `python scripts/enrich_generations.py` from the repo root
-# while keeping library modules at the repository root.
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
-from costs import decimal_text, estimate_uncached_cost_usd, extract_provider_cost_usd, extract_usage
-from events import append_event, ledger_lock, load_events
-from openrouter import OpenRouterClient, OpenRouterError
-from runner import _manifest_path, _validate_manifest
-from settings import get_openrouter_key, load_dotenv
+from .costs import decimal_text, estimate_uncached_cost_usd, extract_provider_cost_usd, extract_usage
+from .events import append_event, ledger_lock, load_events
+from .openrouter import OpenRouterClient, OpenRouterError
+from .runner import _manifest_path, _validate_manifest
+from .settings import get_openrouter_key, load_dotenv
 
 
 def _enrich_ledger_unlocked(ledger_path: str | Path, client: OpenRouterClient) -> dict[str, int]:

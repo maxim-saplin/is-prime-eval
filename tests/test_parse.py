@@ -1,7 +1,7 @@
 import unittest
 
-from parse import parse_response
-from prompt import make_prompt
+from is_prime_eval.parse import parse_response
+from is_prime_eval.prompt import make_prompt
 
 
 class ResponseParserTests(unittest.TestCase):

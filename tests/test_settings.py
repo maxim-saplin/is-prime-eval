@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from settings import get_openrouter_key, load_dotenv
+from is_prime_eval.settings import get_openrouter_key, load_dotenv
 
 
 class DotenvTests(unittest.TestCase):

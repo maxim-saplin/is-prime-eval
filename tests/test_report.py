@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.report import (
+from is_prime_eval.report import (
     render_compact_leaderboard,
     render_leaderboard,
     summarize_run,
@@ -99,7 +99,7 @@ class OptionalEffortReportTests(unittest.TestCase):
                     "attempted": True,
                     "answered": True,
                 }
-                with patch("scripts.report._case_outcomes", return_value=([outcome], True)):
+                with patch("is_prime_eval.report._case_outcomes", return_value=([outcome], True)):
                     summaries.append(summarize_run(ledger))
 
         text = render_leaderboard(summaries)
@@ -135,7 +135,7 @@ class OptionalEffortReportTests(unittest.TestCase):
                             "attempted": complete,
                             "answered": complete,
                         }
-                        with patch("scripts.report._case_outcomes", return_value=([outcome], complete)):
+                        with patch("is_prime_eval.report._case_outcomes", return_value=([outcome], complete)):
                             summary = summarize_run(ledger)
                     self.assertEqual(summary["reasoning_effort"], model_effort.get("reasoning_effort", "unknown"))
                     text = render_leaderboard([summary])

@@ -10,7 +10,7 @@ import threading
 import time
 from typing import Any, Iterable, Mapping, TextIO
 
-from costs import as_decimal, decimal_text
+from .costs import as_decimal, decimal_text
 
 ProgressKey = tuple[str, str | None]  # (fully qualified model ID, optional effort)
 

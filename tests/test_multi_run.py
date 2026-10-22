@@ -10,14 +10,14 @@ from contextlib import redirect_stderr
 from dataclasses import replace
 from unittest.mock import patch
 
-from cases import is_prime
-import multi_run
-from multi_run import ModelRunSpec, run_many
-from openrouter import ModelInfo
-from progress import ProgressReporter
-from request_gate import AccountRequestGate
-from scripts.report import summarize_run
-from runner import RunConfig
+from is_prime_eval.cases import is_prime
+import is_prime_eval.multi_run as multi_run
+from is_prime_eval.multi_run import ModelRunSpec, run_many
+from is_prime_eval.openrouter import ModelInfo
+from is_prime_eval.progress import ProgressReporter
+from is_prime_eval.request_gate import AccountRequestGate
+from is_prime_eval.report import summarize_run
+from is_prime_eval.runner import RunConfig
 
 
 class ParallelMetrics:
@@ -126,7 +126,7 @@ class MultiRunTests(unittest.TestCase):
         output = io.StringIO()
         reporter = ProgressReporter(stream=output)
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch("multi_run.prepare_case_dataset", wraps=multi_run.prepare_case_dataset) as prepare:
+            with patch("is_prime_eval.multi_run.prepare_case_dataset", wraps=multi_run.prepare_case_dataset) as prepare:
                 results = run_many(
                     specs,
                     client_factory=lambda _timeout: ParallelFakeClient(metrics),
@@ -179,7 +179,7 @@ class MultiRunTests(unittest.TestCase):
             for spec in specs
         ]
         with tempfile.TemporaryDirectory() as temp_dir:
-            with patch("multi_run.AccountRequestGate", TrackingGate):
+            with patch("is_prime_eval.multi_run.AccountRequestGate", TrackingGate):
                 results = run_many(
                     specs,
                     client_factory=lambda _timeout: ParallelFakeClient(metrics),
@@ -207,7 +207,7 @@ class MultiRunTests(unittest.TestCase):
         reporter = ProgressReporter(stream=output, heartbeat_interval=0.02)
         with tempfile.TemporaryDirectory() as temp_dir:
             with redirect_stderr(errors):
-                with patch("multi_run.as_completed", side_effect=interrupt_after_first_dispatch):
+                with patch("is_prime_eval.multi_run.as_completed", side_effect=interrupt_after_first_dispatch):
                     results = run_many(
                         specs,
                         client_factory=lambda _timeout: InterruptFakeClient(metrics),

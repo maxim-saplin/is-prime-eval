@@ -19,8 +19,8 @@ are committed and are part of the published evaluation record.
   **retained on purpose**:
   - Every file is referenced by at least one run manifest; none is orphaned.
     The extension batch record also references its frozen supplement.
-  - `scripts/report.py` and plot regeneration re-read the case files through
-    `runner._load_dataset`; deleting them breaks reproducibility of the
+  - `is_prime_eval.report` and plot regeneration re-read the case files through
+    `is_prime_eval.runner._load_dataset`; deleting them breaks reproducibility of the
     published leaderboard and graphs.
   - They are deterministically regenerable from their recorded seed, but
     keeping the files guarantees byte-identical reuse across runs, disjoint

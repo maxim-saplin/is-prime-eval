@@ -2,7 +2,7 @@ import threading
 import time
 import unittest
 
-from request_gate import AccountRequestGate
+from is_prime_eval.request_gate import AccountRequestGate
 
 
 class AccountRequestGateTests(unittest.TestCase):

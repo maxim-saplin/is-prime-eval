@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from events import LedgerCorruptionError, LedgerLockedError, append_event, ledger_lock, load_events
+from is_prime_eval.events import LedgerCorruptionError, LedgerLockedError, append_event, ledger_lock, load_events
 
 
 class EventLedgerTests(unittest.TestCase):

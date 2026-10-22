@@ -1,6 +1,6 @@
 """The fixed prompt used for primality classification."""
 
-from cases import MAX_SUPPORTED_NUMBER
+from .cases import MAX_SUPPORTED_NUMBER
 
 
 def make_prompt(number: int) -> str:

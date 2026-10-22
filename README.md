@@ -58,13 +58,14 @@ The token plot measures **mean final-response completion tokens**, including rep
 
 ## Run it
 
-Python **3.11+**; the evaluator and reports use the standard library. Matplotlib is optional for regenerating charts. Live inference uses OpenRouter and incurs charges.
+Python **3.11+** on Linux or macOS (POSIX advisory locks). The evaluator and reports have no runtime dependencies; Matplotlib is optional for charts. Live inference uses OpenRouter and incurs charges.
 
 ```sh
 python3 -m venv .venv
+.venv/bin/python -m pip install -e .
 cp .env.sample .env
 # Set OR_KEY in .env, then inspect settings before spending:
-.venv/bin/python run.py --model-id inception/mercury-3 --dry-run
+.venv/bin/is-prime-eval --model-id inception/mercury-3 --dry-run
 # Remove --dry-run to evaluate.
 ```
 
@@ -75,11 +76,13 @@ A dry run contacts the model catalog but sends no completion requests. Defaults:
 No key, paid requests, or network access is needed after installing the optional plotting dependency:
 
 ```sh
-.venv/bin/python -m pip install -r requirements-plots.txt
-.venv/bin/python scripts/report.py --results-dir results --output leaderboard.md --readme README.md
-.venv/bin/python scripts/report.py --results-dir results --format analysis --output analysis.md
-.venv/bin/python scripts/plot_results.py
+.venv/bin/python -m pip install -e '.[plots]'
+.venv/bin/is-prime-report --results-dir results --output leaderboard.md --readme README.md
+.venv/bin/is-prime-report --results-dir results --format analysis --output analysis.md
+.venv/bin/is-prime-plot
 .venv/bin/python -m unittest discover -s tests -v
 ```
+
+The implementation lives in `src/is_prime_eval/`, with package metadata and CLI entry points in `pyproject.toml`. `python -m is_prime_eval` is also supported. Commands use the current working directory for `.env`, `results/`, and `graphs/`; benchmark artifacts stay in this repository, not the installed package.
 
 [Full usage, request policy, parallel runs, resume, and depth extension →](docs/usage.md)

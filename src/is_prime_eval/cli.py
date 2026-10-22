@@ -13,18 +13,18 @@ import signal
 import sys
 from typing import Sequence
 
-from extensions import (
+from .extensions import (
     load_extension_parents,
     locked_parents,
     prepare_extension_plan,
     select_parent_ledgers,
 )
-from model_specs import ModelSpec, parse_model_specs
-from multi_run import ModelRunSpec, run_many
-from openrouter import OpenRouterClient, OpenRouterError
-from progress import ProgressReporter
-from request_gate import AccountRequestGate
-from runner import (
+from .model_specs import ModelSpec, parse_model_specs
+from .multi_run import ModelRunSpec, run_many
+from .openrouter import OpenRouterClient, OpenRouterError
+from .progress import ProgressReporter
+from .request_gate import AccountRequestGate
+from .runner import (
     DEFAULT_DEPTHS,
     DEFAULT_MAX_RETRIES,
     DEFAULT_MIN_REQUEST_INTERVAL_SECONDS,
@@ -36,7 +36,7 @@ from runner import (
     resume_run,
     run_new,
 )
-from settings import PROJECT_ROOT, get_openrouter_key, load_dotenv
+from .settings import WORKSPACE_ROOT, get_openrouter_key, load_dotenv
 
 DEFAULT_CLI_TIMEOUT_SECONDS = 600.0
 
@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Explicit completion-token cap; unset sends no token cap",
     )
-    parser.add_argument("--results-dir", default=str(PROJECT_ROOT / "results"))
+    parser.add_argument("--results-dir", default=str(WORKSPACE_ROOT / "results"))
     parser.add_argument("--output", help="Explicit JSONL ledger path (single run only)")
     parser.add_argument("--resume", help="Resume one JSONL event ledger using its saved manifest")
     parser.add_argument(
@@ -455,7 +455,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except EvaluationInterrupted as exc:
             reporter.model_finished(model_id, effort, success=False)
-            print(f"Run paused; resume with: .venv/bin/python run.py --resume {exc.ledger_path}", file=sys.stderr)
+            print(f"Run paused; resume with: is-prime-eval --resume {exc.ledger_path}", file=sys.stderr)
             return 130
         except (ValueError, OSError, OpenRouterError) as exc:
             reporter.model_finished(model_id, effort, success=False)
@@ -523,7 +523,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except EvaluationInterrupted as exc:
             reporter.model_finished(spec.config.model_id, spec.config.reasoning_effort, success=False)
-            print(f"Run paused; resume with: .venv/bin/python run.py --resume {exc.ledger_path}", file=sys.stderr)
+            print(f"Run paused; resume with: is-prime-eval --resume {exc.ledger_path}", file=sys.stderr)
             return 130
         except (ValueError, OSError, OpenRouterError) as exc:
             reporter.model_finished(spec.config.model_id, spec.config.reasoning_effort, success=False)
@@ -542,7 +542,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     exit_code = 130 if any(row.get("batch_interrupted") for row in results) else 0
     if exit_code == 130:
         print(
-            "Batch interrupted. Resume each incomplete model ledger with `run.py --resume <ledger>`.",
+            "Batch interrupted. Resume each incomplete model ledger with `is-prime-eval --resume <ledger>`.",
             file=sys.stderr,
         )
     for row in results:
@@ -571,6 +571,11 @@ def _install_cli_signal_handlers() -> None:
         signal.signal(signal.SIGTERM, _raise_sigterm_as_keyboard_interrupt)
 
 
-if __name__ == "__main__":
+def entrypoint(argv: Sequence[str] | None = None) -> int:
+    """Console/`python -m` entry: install signal handlers, then run main()."""
     _install_cli_signal_handlers()
-    raise SystemExit(main())
+    return main(argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(entrypoint())

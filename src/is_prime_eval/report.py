@@ -3,15 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
-
-# Allow running as `python scripts/report.py` from the repo root
-# while keeping library modules at the repository root.
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
 from decimal import Decimal
 import hashlib
 import json
@@ -19,9 +10,9 @@ import math
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from costs import as_decimal
-from events import load_events
-from runner import _manifest_path, _load_dataset
+from .costs import as_decimal
+from .events import load_events
+from .runner import _manifest_path, _load_dataset
 
 
 def _percentage(count: int, denominator: int) -> str:

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "is-prime-eval"
+version = "0.1.0"
+description = "A prompt-only primality benchmark with auditable model results"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: POSIX",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.8,<4"]
+stats = ["primecountpy==0.2.1"]
+
+[project.scripts]
+is-prime-eval = "is_prime_eval.cli:entrypoint"
+is-prime-report = "is_prime_eval.report:main"
+is-prime-plot = "is_prime_eval.plot_results:main"
+is-prime-enrich = "is_prime_eval.enrich_generations:main"
+
+[project.urls]
+Repository = "https://github.com/maxim-saplin/is-prime-eval"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["is_prime_eval*"]

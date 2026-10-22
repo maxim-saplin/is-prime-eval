@@ -9,9 +9,9 @@ import sys
 import threading
 from typing import Any, Callable, Sequence
 
-from openrouter import ModelInfo, OpenRouterClient
-from request_gate import AccountRequestGate
-from runner import PreparedDataset, RunConfig, prepare_case_dataset, resume_run, run_new
+from .openrouter import ModelInfo, OpenRouterClient
+from .request_gate import AccountRequestGate
+from .runner import PreparedDataset, RunConfig, prepare_case_dataset, resume_run, run_new
 
 
 @dataclass(frozen=True)

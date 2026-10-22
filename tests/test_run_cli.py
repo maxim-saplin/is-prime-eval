@@ -7,10 +7,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from cases import is_prime
-from openrouter import ModelInfo, OpenRouterClient
-from run import _settings, build_parser, main, parse_depths
-from runner import RunConfig, run_new
+from is_prime_eval.cases import is_prime
+from is_prime_eval.openrouter import ModelInfo, OpenRouterClient
+from is_prime_eval.cli import _settings, build_parser, main, parse_depths
+from is_prime_eval.runner import RunConfig, run_new
 
 
 class FakeCatalogClient(OpenRouterClient):
@@ -62,10 +62,10 @@ class RunCliTests(unittest.TestCase):
             "summary": {"correct": 360, "incorrect": 0},
         }
         with (
-            patch("run.OpenRouterClient", FakeCatalogClient),
-            patch("run.load_dotenv"),
-            patch("run.get_openrouter_key", return_value="test-key"),
-            patch("run.run_new", return_value=result) as execute,
+            patch("is_prime_eval.cli.OpenRouterClient", FakeCatalogClient),
+            patch("is_prime_eval.cli.load_dotenv"),
+            patch("is_prime_eval.cli.get_openrouter_key", return_value="test-key"),
+            patch("is_prime_eval.cli.run_new", return_value=result) as execute,
             redirect_stdout(output), redirect_stderr(io.StringIO()),
         ):
             self.assertEqual(main(["--model-id", "inception/mercury-3"]), 0)
@@ -119,9 +119,9 @@ class RunCliTests(unittest.TestCase):
         FakeCatalogClient.resolved_ids = []
         output = io.StringIO()
         with (
-            patch("run.OpenRouterClient", FakeCatalogClient),
-            patch("run.load_dotenv"),
-            patch("run.get_openrouter_key", return_value="test-key"),
+            patch("is_prime_eval.cli.OpenRouterClient", FakeCatalogClient),
+            patch("is_prime_eval.cli.load_dotenv"),
+            patch("is_prime_eval.cli.get_openrouter_key", return_value="test-key"),
             redirect_stdout(output), redirect_stderr(io.StringIO()),
         ):
             self.assertEqual(main(["--model-id", "openai/gpt-4-turbo", "--timeout", "2", "--dry-run"]), 0)
@@ -132,9 +132,9 @@ class RunCliTests(unittest.TestCase):
         FakeCatalogClient.resolved_ids = []
         output = io.StringIO()
         with (
-            patch("run.OpenRouterClient", FakeCatalogClient),
-            patch("run.load_dotenv"),
-            patch("run.get_openrouter_key", return_value="test-key"),
+            patch("is_prime_eval.cli.OpenRouterClient", FakeCatalogClient),
+            patch("is_prime_eval.cli.load_dotenv"),
+            patch("is_prime_eval.cli.get_openrouter_key", return_value="test-key"),
             redirect_stdout(output),
         ):
             result = main([
@@ -149,9 +149,9 @@ class RunCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "non-reasoning.jsonl"
             with (
-                patch("run.OpenRouterClient", FakeCatalogClient),
-                patch("run.load_dotenv"),
-                patch("run.get_openrouter_key", return_value="test-key"),
+                patch("is_prime_eval.cli.OpenRouterClient", FakeCatalogClient),
+                patch("is_prime_eval.cli.load_dotenv"),
+                patch("is_prime_eval.cli.get_openrouter_key", return_value="test-key"),
                 redirect_stdout(io.StringIO()),
                 redirect_stderr(io.StringIO()),
             ):
@@ -175,9 +175,9 @@ class RunCliTests(unittest.TestCase):
         FakeCatalogClient.resolved_ids = []
         output = io.StringIO()
         with (
-            patch("run.OpenRouterClient", FakeCatalogClient),
-            patch("run.load_dotenv"),
-            patch("run.get_openrouter_key", return_value="test-key"),
+            patch("is_prime_eval.cli.OpenRouterClient", FakeCatalogClient),
+            patch("is_prime_eval.cli.load_dotenv"),
+            patch("is_prime_eval.cli.get_openrouter_key", return_value="test-key"),
             redirect_stdout(output),
         ):
             result = main(
@@ -210,9 +210,9 @@ class RunCliTests(unittest.TestCase):
         # Same identity repeated in one batch is rejected before catalog requests.
         FakeCatalogClient.resolved_ids = []
         with (
-            patch("run.OpenRouterClient", FakeCatalogClient),
-            patch("run.load_dotenv"),
-            patch("run.get_openrouter_key", return_value="test-key"),
+            patch("is_prime_eval.cli.OpenRouterClient", FakeCatalogClient),
+            patch("is_prime_eval.cli.load_dotenv"),
+            patch("is_prime_eval.cli.get_openrouter_key", return_value="test-key"),
             redirect_stderr(io.StringIO()),
         ):
             with self.assertRaises(SystemExit):
@@ -260,9 +260,9 @@ class RunCliTests(unittest.TestCase):
             output = io.StringIO()
             errors = io.StringIO()
             with (
-                patch("run.OpenRouterClient", lambda *args, **kwargs: FakeCatalogClient(fail_if_called=True)),
-                patch("run.load_dotenv"),
-                patch("run.get_openrouter_key", return_value="test-key"),
+                patch("is_prime_eval.cli.OpenRouterClient", lambda *args, **kwargs: FakeCatalogClient(fail_if_called=True)),
+                patch("is_prime_eval.cli.load_dotenv"),
+                patch("is_prime_eval.cli.get_openrouter_key", return_value="test-key"),
                 redirect_stdout(output),
                 redirect_stderr(errors),
             ):
@@ -310,9 +310,9 @@ class RunCliTests(unittest.TestCase):
             output = io.StringIO()
             errors = io.StringIO()
             with (
-                patch("run.OpenRouterClient", FakeCatalogClient),
-                patch("run.load_dotenv"),
-                patch("run.get_openrouter_key", return_value="test-key"),
+                patch("is_prime_eval.cli.OpenRouterClient", FakeCatalogClient),
+                patch("is_prime_eval.cli.load_dotenv"),
+                patch("is_prime_eval.cli.get_openrouter_key", return_value="test-key"),
                 redirect_stdout(output),
                 redirect_stderr(errors),
             ):

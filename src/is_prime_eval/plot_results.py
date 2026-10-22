@@ -3,15 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
-
-# Allow running as `python scripts/plot_results.py` from the repo root
-# while keeping library modules at the repository root.
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
 from collections import defaultdict
 import hashlib
 from importlib.metadata import version
@@ -22,8 +13,8 @@ import random
 from statistics import fmean
 from typing import Any, Mapping, Sequence
 
-from scripts.report import discover_ledgers, load_summaries, wilson_95_ci
-from settings import PROJECT_ROOT
+from .report import discover_ledgers, load_summaries, wilson_95_ci
+from .settings import WORKSPACE_ROOT
 
 DEPTHS = tuple(range(4, 16))
 
@@ -227,8 +218,8 @@ def draw_graphs(points: Sequence[Mapping[str, Any]], output: Path, best_label: s
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--results-dir", type=Path, default=PROJECT_ROOT / "results")
-    parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "graphs")
+    parser.add_argument("--results-dir", type=Path, default=WORKSPACE_ROOT / "results")
+    parser.add_argument("--output-dir", type=Path, default=WORKSPACE_ROOT / "graphs")
     parser.add_argument("--bootstrap-samples", type=int, default=2000)
     parser.add_argument("--bootstrap-seed", type=int, default=1729, help="Plot CI reproducibility only; never changes evaluation inputs")
     args = parser.parse_args(argv)

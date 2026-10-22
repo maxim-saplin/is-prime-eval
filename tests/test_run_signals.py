@@ -10,7 +10,7 @@ class RunSignalHandlerTests(unittest.TestCase):
 import os
 import signal
 signal.signal(signal.SIGINT, signal.SIG_IGN)
-import run
+import is_prime_eval.cli as run
 run._install_cli_signal_handlers()
 for sig in (signal.SIGINT, signal.SIGTERM):
     try:

@@ -6,7 +6,7 @@ from decimal import Decimal
 from email.utils import format_datetime
 from urllib.error import HTTPError
 
-from openrouter import ModelInfo, OpenRouterClient, OpenRouterError
+from is_prime_eval.openrouter import ModelInfo, OpenRouterClient, OpenRouterError
 
 
 class FakeHTTPResponse:
