@@ -339,14 +339,28 @@ def _effort_label(summary: Mapping[str, Any]) -> str:
 def _samples_label(summary: Mapping[str, Any]) -> str:
     by_depth = summary.get("samples_by_depth") or summary.get("samples_per_class_by_depth") or {}
     if by_depth:
-        return "stratified " + ", ".join(
-            f"{depth}d={count}+{count}"
-            for depth, count in sorted(by_depth.items(), key=lambda item: int(item[0]))
-        )
+        counts = sorted((int(depth), int(count)) for depth, count in by_depth.items())
+        if len({count for _depth, count in counts}) == 1:
+            count = counts[0][1]
+            return f"{count}+{count} per digit"
+        bands = []
+        start = previous = counts[0][0]
+        current = counts[0][1]
+        for depth, count in counts[1:]:
+            if depth == previous + 1 and count == current:
+                previous = depth
+                continue
+            label = f"{start}–{previous}d" if start != previous else f"{start}d"
+            bands.append(f"{current}+{current} at {label}")
+            start = previous = depth
+            current = count
+        label = f"{start}–{previous}d" if start != previous else f"{start}d"
+        bands.append(f"{current}+{current} at {label}")
+        return "; ".join(bands)
     per_class = summary.get("samples_per_class")
     if per_class is not None:
-        return f"{per_class} prime + {per_class} non-prime per digit"
-    return "unknown per-depth sample counts"
+        return f"{per_class}+{per_class} per digit"
+    return "unknown"
 
 
 def _route_label(summary: Mapping[str, Any]) -> str:
@@ -362,138 +376,144 @@ def _incorrect_breakdown(counts: Mapping[str, int]) -> str:
     )
 
 
-def _cohort_key(summary: Mapping[str, Any]) -> tuple[Any, ...]:
+def _coverage_label(summary: Mapping[str, Any]) -> str:
+    depths = sorted(int(depth) for depth in summary.get("depths", []))
+    if not depths:
+        depth_label = "depths unknown"
+    elif depths == list(range(depths[0], depths[-1] + 1)):
+        depth_label = f"{depths[0]}–{depths[-1]}"
+    else:
+        depth_label = ",".join(map(str, depths))
+    return f"{depth_label} / {summary['scheduled']} cases"
+
+
+def _policy_label(summary: Mapping[str, Any]) -> str:
     config = summary.get("config", {})
-    return (
-        summary.get("dataset_id"),
-        summary.get("prompt_version"),
-        tuple(summary.get("depths", [])),
-        summary.get("samples_per_class"),
-        config.get("max_completion_tokens"),
-        config.get("max_attempts"),
-        config.get("retry_delay_seconds"),
-        config.get("timeout_seconds"),
-    )
+    timeout = config.get("timeout_seconds", "?")
+    attempts = config.get("max_attempts", "?")
+    retry = config.get("retry_delay_seconds", "?")
+    cap = config.get("max_completion_tokens")
+    interval = config.get("min_request_interval_seconds", 4.0)
+    rate = "unpaced" if not interval else f"{60.0 / float(interval):g} RPM"
+    cap_label = "no cap" if cap is None else f"cap {cap}"
+    return f"{timeout}s · {attempts} attempts · {retry}s retry · {cap_label} · {rate}"
 
 
 def render_leaderboard(summaries: Sequence[Mapping[str, Any]]) -> str:
     if not summaries:
-        return "No completed evaluation runs found.\n"
-    groups: dict[tuple[Any, ...], list[Mapping[str, Any]]] = {}
-    for summary in summaries:
-        groups.setdefault(_cohort_key(summary), []).append(summary)
+        return "No evaluation runs found.\n"
 
-    lines = ["# Prime-eval leaderboard", ""]
-    for group_key, group in sorted(groups.items(), key=lambda item: str(item[0])):
-        dataset_id, prompt_version, depths, samples_per_class, max_tokens, max_attempts, retry_delay, timeout = group_key
-        max_tokens_label = (
-            "no explicit token cap"
-            if max_tokens is None
-            else str(max_tokens)
-        )
+    complete_runs = sorted(
+        (run for run in summaries if run["complete"]),
+        key=lambda run: (
+            -run["counts"]["correct"] / max(1, run["scheduled"]),
+            run["model_id"].casefold(),
+            str(run.get("reasoning_effort") or ""),
+            str(run.get("run_id") or ""),
+        ),
+    )
+    incomplete_runs = sorted(
+        (run for run in summaries if not run["complete"]),
+        key=lambda run: (
+            run["model_id"].casefold(),
+            str(run.get("reasoning_effort") or ""),
+            str(run.get("run_id") or ""),
+        ),
+    )
+    lines = [
+        "# Prime-eval leaderboard",
+        "",
+        "All discovered results are listed together; each row is one run (a completed parent+extension is shown once). "
+        "Depth coverage, sample counts, and request policy are shown per run. Rankings sort by raw accuracy; runs with different frozen questions are not paired comparisons.",
+        "",
+    ]
+    if complete_runs:
         lines.extend(
             [
-                f"## Dataset `{dataset_id}`",
+                "## Completed runs",
                 "",
-                f"Prompt: `{prompt_version}` · Digits: {', '.join(map(str, depths))} · "
-                f"Samples: {_samples_label(group[0])} · "
-                f"Max attempts: {max_attempts} · Completion token cap: {max_tokens_label} · "
-                f"Timeout: {timeout}s · Retry delay: {retry_delay}s · Effort shown per model",
-                "",
+                "| Rank | Model ID | Effort | Run (parent+child) | Depths / cases | Samples | Request policy | Provider route | Answered / scheduled | Correct | Approx. 95% Wilson CI | Incorrect | Incorrect reasons |",
+                "|---:|---|---|---|---:|---|---|---|---:|---:|---:|---:|---|",
             ]
         )
-        complete_runs = sorted(
-            (run for run in group if run["complete"]),
-            key=lambda run: (
-                -run["counts"]["correct"] / max(1, run["scheduled"]),
-                run["model_id"].casefold(),
-                str(run.get("reasoning_effort") or ""),
-                str(run.get("run_id") or ""),
-            ),
+        for rank, run in enumerate(complete_runs, start=1):
+            counts = run["counts"]
+            total = run["scheduled"]
+            lines.append(
+                f"| {rank} | {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
+                f"{_run_label(run)} | {_coverage_label(run)} | {_samples_label(run)} | "
+                f"{_policy_label(run)} | "
+                f"{_route_label(run)} | {counts['answered_cases']}/{total} | "
+                f"{_percentage(counts['correct'], total)} | {_ci_cell(counts['correct'], total)} | "
+                f"{_percentage(counts['incorrect'], total)} | {_incorrect_breakdown(counts)} |"
+            )
+        lines.extend(
+            [
+                "",
+                "## Results by digit",
+                "",
+                "| Model ID | Effort | Run (parent+child) | Digits | Correct | Approx. 95% Wilson CI | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |",
+                "|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
+            ]
         )
-        incomplete_runs = [run for run in group if not run["complete"]]
-        if complete_runs:
-            lines.extend(
-                [
-                    "### Model results",
-                    "",
-                    "| Rank | Model ID | Effort | Provider route | Run | Answered / scheduled | Correct | Approx. 95% Wilson CI | Incorrect | Incorrect reasons |",
-                    "|---:|---|---|---|---|---:|---:|---:|---:|---|",
-                ]
-            )
-            for rank, run in enumerate(complete_runs, start=1):
-                counts = run["counts"]
-                total = run["scheduled"]
-                lines.append(
-                    f"| {rank} | {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
-                    f"{_route_label(run)} | {_run_label(run)} | "
-                    f"{counts['answered_cases']}/{total} | "
-                    f"{_percentage(counts['correct'], total)} | "
-                    f"{_ci_cell(counts['correct'], total)} | "
-                    f"{_percentage(counts['incorrect'], total)} | "
-                    f"{_incorrect_breakdown(counts)} |"
-                )
-            lines.extend(["", "### Results by digit", "", "| Model ID | Effort | Run | Digits | Correct | Approx. 95% Wilson CI | Incorrect | Truncated | Primes correctly identified | Non-primes correctly identified |", "|---|---|---|---:|---:|---:|---:|---:|---:|---:|"])
-            for run in complete_runs:
-                for depth in run["depths"]:
-                    cell = run["by_depth"][depth]
-                    scheduled = cell["scheduled"]
-                    incorrect = cell["incorrect"]
-                    lines.append(
-                        f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
-                        f"{_run_label(run)} | {depth} | "
-                        f"{_percentage(cell['correct'], scheduled)} | "
-                        f"{_ci_cell(cell['correct'], scheduled)} | "
-                        f"{_percentage(incorrect, scheduled)} | "
-                        f"{cell['truncated']} | "
-                        f"{cell['primes_correct']}/{cell['primes_scheduled']} | "
-                        f"{cell['nonprimes_correct']}/{cell['nonprimes_scheduled']} |"
-                    )
-            lines.extend(
-                [
-                    "",
-                    "### Cost per run",
-                    "",
-                    "| Model ID | Effort | Provider route | Run | Prompt / completion tokens | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
-                    "|---|---|---|---|---:|---:|---:|",
-                ]
-            )
-            for run in complete_runs:
+        for run in complete_runs:
+            for depth in run["depths"]:
+                cell = run["by_depth"][depth]
+                scheduled = cell["scheduled"]
                 lines.append(
                     f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
-                    f"{_route_label(run)} | {_run_label(run)} | "
-                    f"{run['prompt_tokens']:,} / {run['completion_tokens']:,} "
-                    f"({run['token_usage_known_attempts']}/{run['attempt_count']} attempts with token counts) | "
-                    f"{run['provider_cost_cell']} | {run['normalized_cost_cell']} |"
+                    f"{_run_label(run)} | {depth} | {_percentage(cell['correct'], scheduled)} | "
+                    f"{_ci_cell(cell['correct'], scheduled)} | "
+                    f"{_percentage(cell['incorrect'], scheduled)} | {cell['truncated']} | "
+                    f"{cell['primes_correct']}/{cell['primes_scheduled']} | "
+                    f"{cell['nonprimes_correct']}/{cell['nonprimes_scheduled']} |"
                 )
-        if incomplete_runs:
-            lines.extend(
-                [
-                    "",
-                    "### Incomplete runs (not ranked)",
-                    "",
-                    "| Model ID | Effort | Provider route | Run | Scheduled | Correct | Incorrect terminal items | Attempted cases | Answered | Terminal no-response | Pending | Never attempted | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
-                    "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
-                ]
+        lines.extend(
+            [
+                "",
+                "## Cost per run",
+                "",
+                "| Model ID | Effort | Run (parent+child) | Prompt / completion tokens | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
+                "|---|---|---|---:|---:|---:|",
+            ]
+        )
+        for run in complete_runs:
+            lines.append(
+                f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | {_run_label(run)} | "
+                f"{run['prompt_tokens']:,} / {run['completion_tokens']:,} "
+                f"({run['token_usage_known_attempts']}/{run['attempt_count']} attempts with token counts) | "
+                f"{run['provider_cost_cell']} | {run['normalized_cost_cell']} |"
             )
-            for run in incomplete_runs:
-                counts = run["counts"]
-                lines.append(
-                    f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | "
-                    f"{_route_label(run)} | {_run_label(run)} | {run['scheduled']} | "
-                    f"{_percentage(counts['correct'], run['scheduled'])} | "
-                    f"{_percentage(counts['incorrect'], run['scheduled'])} | "
-                    f"{counts['attempted_cases']} | {counts['answered_cases']} | "
-                    f"{counts['no_response']} | {counts['pending']} | "
-                    f"{counts['not_attempted']} | {run['provider_cost_cell']} | "
-                    f"{run['normalized_cost_cell']} |"
-                )
-        lines.append("")
+
+    if incomplete_runs:
+        lines.extend(
+            [
+                "",
+                "## Incomplete runs (provisional, not ranked)",
+                "",
+                "| Model ID | Effort | Run (parent+child) | Depths / cases | Samples | Request policy | Provider route | Correct | Incorrect terminal items | Attempted | Answered | No response | Pending | Never attempted | Provider-reported cost (USD) | Estimated cost without cache discounts (USD) |",
+                "|---|---|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for run in incomplete_runs:
+            counts = run["counts"]
+            total = run["scheduled"]
+            lines.append(
+                f"| {_markdown_cell(run['model_id'])} | {_effort_label(run)} | {_run_label(run)} | "
+                f"{_coverage_label(run)} | {_samples_label(run)} | {_policy_label(run)} | {_route_label(run)} | "
+                f"{_percentage(counts['correct'], total)} | {_percentage(counts['incorrect'], total)} | "
+                f"{counts['attempted_cases']} | {counts['answered_cases']} | {counts['no_response']} | "
+                f"{counts['pending']} | {counts['not_attempted']} | {run['provider_cost_cell']} | "
+                f"{run['normalized_cost_cell']} |"
+            )
+
     lines.extend(
         [
+            "",
             "Incorrect includes wrong labels, invalid responses, and retry-exhausted no-response items. "
-            "Invalid and no-response counts are shown separately as reasons; truncated is an invalid-response sub-count. Percentages use all scheduled cases. "
-            "Approximate 95% Wilson intervals are item-level summaries for this fixed, balanced test set, not population or model-superiority intervals; incomplete runs have no interval. "
+            "Truncated is a sub-count of invalid responses. Percentages use every scheduled case. "
+            "Approximate 95% Wilson intervals are per-run item-level summaries, not population, session-to-session, or model-difference intervals; incomplete runs have no interval. "
+            "Runs with different question sets or sample counts are shown together for inventory, but their rankings are descriptive, not paired comparisons. "
             "Costs cover all request attempts; partial/unknown coverage is labeled, never treated as $0.",
             "",
         ]
@@ -585,8 +605,13 @@ def _merge_extension_summary(
 
 
 def _run_label(summary: Mapping[str, Any]) -> str:
-    if summary.get("extension_batch_id") and summary.get("parent_run_id"):
-        return f"{str(summary['parent_run_id'])[:8]}+{str(summary['extension_batch_id'])[:8]}"
+    parent_id = summary.get("parent_run_id")
+    child_ids = summary.get("extension_child_run_ids")
+    if parent_id and child_ids:
+        return f"{str(parent_id)[:8]}+{str(child_ids[0])[:8]}"
+    extension = summary.get("extension")
+    if isinstance(extension, Mapping) and extension.get("parent_run_id"):
+        return f"{str(extension['parent_run_id'])[:8]}+{str(summary.get('run_id') or '')[:8]}"
     return str(summary.get("run_id") or "")[:8]
 
 

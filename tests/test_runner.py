@@ -611,7 +611,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(before["counts"]["pending"], 1)
         self.assertEqual(before["counts"]["not_attempted"], 1)
         provisional = render_leaderboard([before])
-        self.assertIn("Incomplete runs (not ranked)", provisional)
+        self.assertIn("Incomplete runs (provisional, not ranked)", provisional)
         self.assertIn("Provider-reported cost (USD)", provisional)
         self.assertIn("Unknown (0/1 requests priced)", provisional)
 
@@ -712,12 +712,13 @@ class RunnerTests(unittest.TestCase):
             summarize_run(replicate["ledger_path"]),
         ]
         leaderboard = render_leaderboard(summaries)
-        self.assertEqual(leaderboard.count("## Dataset"), 1)
+        self.assertEqual(leaderboard.count("## Completed runs"), 1)
+        self.assertNotIn("## Dataset `", leaderboard)
         self.assertIn("openai/gpt-6-luna", leaderboard)
         self.assertIn("provider/other-model", leaderboard)
         self.assertIn("| low |", leaderboard)
         self.assertIn("| medium |", leaderboard)
-        self.assertIn("| Effort | Run |", leaderboard)
+        self.assertIn("| Effort | Run (parent+child) |", leaderboard)
         self.assertIn(first["run_id"][:8], leaderboard)
         self.assertIn(second["run_id"][:8], leaderboard)
         self.assertIn(replicate["run_id"][:8], leaderboard)

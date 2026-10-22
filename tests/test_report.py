@@ -24,6 +24,44 @@ class WilsonIntervalTests(unittest.TestCase):
 
 
 class OptionalEffortReportTests(unittest.TestCase):
+    def test_different_datasets_share_one_results_table_without_dataset_ids(self):
+        runs = (
+            ("run-a", "provider/mercury", "dataset-a", "correct"),
+            ("run-b", "provider/other", "dataset-b", "wrong_label"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            summaries = []
+            for run_id, model_id, dataset_id, outcome_name in runs:
+                ledger = Path(directory) / f"{run_id}.jsonl"
+                ledger.write_text("", encoding="utf-8")
+                ledger.with_suffix(".manifest.json").write_text(
+                    json.dumps({
+                        "run_id": run_id,
+                        "model": {"model_id": model_id, "reasoning_effort": None},
+                        "config": {"timeout_seconds": 600, "max_attempts": 6, "retry_delay_seconds": 1},
+                        "dataset": {"dataset_id": dataset_id, "depths": [4], "samples_per_class": 1},
+                    }),
+                    encoding="utf-8",
+                )
+                outcome = {
+                    "depth": 4,
+                    "outcome": outcome_name,
+                    "gold_label": "PRIME",
+                    "attempted": True,
+                    "answered": True,
+                }
+                with patch("report._case_outcomes", return_value=([outcome], True)):
+                    summaries.append(summarize_run(ledger))
+
+        text = render_leaderboard(summaries)
+        self.assertEqual(text.count("## Completed runs"), 1)
+        self.assertNotIn("## Dataset `", text)
+        self.assertNotIn("dataset-a", text)
+        self.assertNotIn("dataset-b", text)
+        self.assertIn("provider/mercury", text)
+        self.assertIn("provider/other", text)
+        self.assertIn("different frozen questions are not paired comparisons", text)
+
     def test_missing_and_null_effort_remain_distinct_in_all_report_tables(self):
         examples = (
             ({}, "unknown"),

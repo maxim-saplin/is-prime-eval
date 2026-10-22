@@ -306,7 +306,7 @@ class ExtensionIntegrationTests(unittest.TestCase):
             self.assertEqual(summary["provider_cost_total"], Decimal("0.00234"))
             self.assertEqual(len(summary["extension_child_run_ids"]), 1)
             self.assertIn(
-                f"{summary['parent_run_id'][:8]}+{summary['extension_batch_id'][:8]}",
+                f"{summary['parent_run_id'][:8]}+{summary['extension_child_run_ids'][0][:8]}",
                 render_leaderboard([summary]),
             )
         self._assert_parent_hashes_unchanged()
