@@ -38,9 +38,9 @@ Tokens (prompt + completion), provider-reported cost in USD, and API request tim
 
 The plots retain the full **4–15-digit** range to show the transition from easy to hard. Blue is the single best overall full-range run; orange is the equal-weight mean of all 17 completed model/reasoning runs—not an average over distinct model families. Gray bands are pointwise 95% intervals, conditional on the saved runs and winner selection.
 
-<a href="graphs/accuracy-vs-depth.png"><img src="graphs/accuracy-vs-depth.png" alt="Accuracy versus decimal digit depth" width="640"></a>
+<a href="graphs/accuracy-vs-depth.png"><img src="graphs/accuracy-vs-depth.png" alt="Accuracy versus decimal digit depth" width="760"></a>
 
-<a href="graphs/tokens-vs-depth.png"><img src="graphs/tokens-vs-depth.png" alt="Completion tokens versus decimal digit depth" width="640"></a>
+<a href="graphs/tokens-vs-depth.png"><img src="graphs/tokens-vs-depth.png" alt="Completion tokens versus decimal digit depth" width="760"></a>
 
 Click either plot to view it full size.
 
