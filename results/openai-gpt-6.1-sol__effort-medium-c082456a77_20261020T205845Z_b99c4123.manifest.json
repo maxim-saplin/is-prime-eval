@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "run_id": "8627f7ce096946aa872b6e1ad1429462",
+  "created_at": "2026-10-20T20:58:45.358055Z",
+  "model": {
+    "model_id": "openai/gpt-6.1-sol",
+    "name": "OpenAI: GPT-6.1 Sol",
+    "prompt_rate_usd_per_million": "2.000000",
+    "completion_rate_usd_per_million": "10.00000",
+    "pricing_source": "OpenRouter /models catalog (uncached rates)",
+    "pricing_retrieved_at": "2026-10-20T15:41:37.331822Z",
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "seed",
+      "structured_outputs",
+      "tool_choice",
+      "tools",
+      "verbosity"
+    ],
+    "reasoning_effort": "medium"
+  },
+  "config": {
+    "model_id": "openai/gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "timeout_seconds": 600.0,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "samples_per_class": 10,
+    "seed": 2026,
+    "max_attempts": 6,
+    "retry_delay_seconds": 1.0,
+    "max_completion_tokens": null,
+    "min_request_interval_seconds": 4.0
+  },
+  "prompt": {
+    "version": "prime-label-v1",
+    "template": "Is {number} prime? Reply with only PRIME or COMPOSITE."
+  },
+  "parser_version": "bare-prime-composite-v1",
+  "dataset": {
+    "dataset_id": "prime-v1-fc48a8ff5cee2be5",
+    "sha256": "fc48a8ff5cee2be50fc87f51916018fba9bb856ea28b3616edfc734e7ebd9652",
+    "file": "datasets/prime-v1-fc48a8ff5cee2be5.json",
+    "case_count": 140,
+    "generator_version": "v1",
+    "seed": 2026,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "samples_per_class": 10
+  },
+  "pricing": {
+    "source": "OpenRouter /models catalog (uncached rates)",
+    "retrieved_at": "2026-10-20T15:41:37.331822Z",
+    "model_id": "openai/gpt-6.1-sol",
+    "prompt_rate_usd_per_million": "2.000000",
+    "completion_rate_usd_per_million": "10.00000"
+  },
+  "ledger_file": "openai-gpt-6.1-sol__effort-medium-c082456a77_20261020T205845Z_b99c4123.jsonl",
+  "config_sha256": "2b3ff43ec3ac7358fdc02bef8d1769ce63a0248c4b626e65737f5574dddf2f5f"
+}

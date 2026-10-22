@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "run_id": "aa41dde480eb4f38ba1c5f9d46aba3fa",
+  "created_at": "2026-10-21T12:56:15.308647Z",
+  "model": {
+    "model_id": "google/gemini-4-argon",
+    "name": "Google: Gemini 4 Argon",
+    "prompt_rate_usd_per_million": "2.000000",
+    "completion_rate_usd_per_million": "10.00000",
+    "pricing_source": "OpenRouter /models catalog (uncached rates)",
+    "pricing_retrieved_at": "2026-10-21T12:56:15.295437Z",
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_p"
+    ],
+    "reasoning_effort": "high"
+  },
+  "config": {
+    "model_id": "google/gemini-4-argon",
+    "reasoning_effort": "high",
+    "timeout_seconds": 600.0,
+    "seed": 3298726667213605434,
+    "seed_source": "system_random",
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "samples_per_class": 15,
+    "samples_per_class_by_depth": null,
+    "max_attempts": 6,
+    "retry_delay_seconds": 1.0,
+    "max_completion_tokens": null,
+    "min_request_interval_seconds": 4.0
+  },
+  "prompt": {
+    "version": "prime-label-v1",
+    "template": "Is {number} prime? Reply with only PRIME or COMPOSITE."
+  },
+  "parser_version": "bare-prime-composite-v1",
+  "dataset": {
+    "dataset_id": "prime-v1-031c35827576c3f9",
+    "sha256": "031c35827576c3f9fa0688270480ed97d2ed31347fc3d29f2debacf7510f687f",
+    "file": "datasets/prime-v1-031c35827576c3f9.json",
+    "case_count": 360,
+    "generator_version": "v1",
+    "seed": 3298726667213605434,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "samples_per_class": 15
+  },
+  "pricing": {
+    "source": "OpenRouter /models catalog (uncached rates)",
+    "retrieved_at": "2026-10-21T12:56:15.295437Z",
+    "model_id": "google/gemini-4-argon",
+    "prompt_rate_usd_per_million": "2.000000",
+    "completion_rate_usd_per_million": "10.00000"
+  },
+  "ledger_file": "google-gemini-4-argon__effort-high-6ef7c9b15e_20261021T125615Z_26d0cfed.jsonl",
+  "config_sha256": "69f826c1ec761d4007545df71aaf6caf8492ceaa17b1f23e7ecab41016a40cbd"
+}

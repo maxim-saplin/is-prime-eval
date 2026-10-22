@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "run_id": "e85bb334e3c14431bd99cf78a5774420",
+  "created_at": "2026-10-20T21:30:54.641805Z",
+  "model": {
+    "model_id": "openai/gpt-4-turbo",
+    "name": "OpenAI: GPT-4 Turbo",
+    "prompt_rate_usd_per_million": "10.00000",
+    "completion_rate_usd_per_million": "30.00000",
+    "pricing_source": "OpenRouter /models catalog (uncached rates)",
+    "pricing_retrieved_at": "2026-10-20T15:41:37.331834Z",
+    "supported_parameters": [
+      "frequency_penalty",
+      "logit_bias",
+      "logprobs",
+      "max_tokens",
+      "presence_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_logprobs",
+      "top_p"
+    ],
+    "reasoning_effort": null
+  },
+  "config": {
+    "model_id": "openai/gpt-4-turbo",
+    "reasoning_effort": null,
+    "timeout_seconds": 600.0,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "samples_per_class": 10,
+    "seed": 2026,
+    "max_attempts": 6,
+    "retry_delay_seconds": 1.0,
+    "max_completion_tokens": null,
+    "min_request_interval_seconds": 4.0
+  },
+  "prompt": {
+    "version": "prime-label-v1",
+    "template": "Is {number} prime? Reply with only PRIME or COMPOSITE."
+  },
+  "parser_version": "bare-prime-composite-v1",
+  "dataset": {
+    "dataset_id": "prime-v1-fc48a8ff5cee2be5",
+    "sha256": "fc48a8ff5cee2be50fc87f51916018fba9bb856ea28b3616edfc734e7ebd9652",
+    "file": "datasets/prime-v1-fc48a8ff5cee2be5.json",
+    "case_count": 140,
+    "generator_version": "v1",
+    "seed": 2026,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "samples_per_class": 10
+  },
+  "pricing": {
+    "source": "OpenRouter /models catalog (uncached rates)",
+    "retrieved_at": "2026-10-20T15:41:37.331834Z",
+    "model_id": "openai/gpt-4-turbo",
+    "prompt_rate_usd_per_million": "10.00000",
+    "completion_rate_usd_per_million": "30.00000"
+  },
+  "ledger_file": "openai-gpt-4-turbo__effort-omitted-74234e98af_20261020T213054Z_abdc61ca.jsonl",
+  "config_sha256": "61cde16906f304f41dc378b8a5d68102ac78cffe8fb11882cb0e71f67f96c1bf"
+}

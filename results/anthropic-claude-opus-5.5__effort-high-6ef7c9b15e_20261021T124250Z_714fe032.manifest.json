@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "run_id": "eb477281b23443168bbecd63532bc32b",
+  "created_at": "2026-10-21T12:42:50.926115Z",
+  "model": {
+    "model_id": "anthropic/claude-opus-5.5",
+    "name": "Anthropic: Claude Opus 5.5",
+    "prompt_rate_usd_per_million": "4.000000",
+    "completion_rate_usd_per_million": "20.00000",
+    "pricing_source": "OpenRouter /models catalog (uncached rates)",
+    "pricing_retrieved_at": "2026-10-21T12:42:50.917688Z",
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "tool_choice",
+      "tools",
+      "verbosity"
+    ],
+    "reasoning_effort": "high"
+  },
+  "config": {
+    "model_id": "anthropic/claude-opus-5.5",
+    "reasoning_effort": "high",
+    "timeout_seconds": 600.0,
+    "seed": 10483388827479932225,
+    "seed_source": "system_random",
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "samples_per_class": 15,
+    "samples_per_class_by_depth": null,
+    "max_attempts": 6,
+    "retry_delay_seconds": 1.0,
+    "max_completion_tokens": null,
+    "min_request_interval_seconds": 4.0
+  },
+  "prompt": {
+    "version": "prime-label-v1",
+    "template": "Is {number} prime? Reply with only PRIME or COMPOSITE."
+  },
+  "parser_version": "bare-prime-composite-v1",
+  "dataset": {
+    "dataset_id": "prime-v1-c876fabfc98c4744",
+    "sha256": "c876fabfc98c47449c9f37896c29c82e7ee2f8cb124d565f332b7346a12bf52f",
+    "file": "datasets/prime-v1-c876fabfc98c4744.json",
+    "case_count": 360,
+    "generator_version": "v1",
+    "seed": 10483388827479932225,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "samples_per_class": 15
+  },
+  "pricing": {
+    "source": "OpenRouter /models catalog (uncached rates)",
+    "retrieved_at": "2026-10-21T12:42:50.917688Z",
+    "model_id": "anthropic/claude-opus-5.5",
+    "prompt_rate_usd_per_million": "4.000000",
+    "completion_rate_usd_per_million": "20.00000"
+  },
+  "ledger_file": "anthropic-claude-opus-5.5__effort-high-6ef7c9b15e_20261021T124250Z_714fe032.jsonl",
+  "config_sha256": "a79f03ed7ac1f93dbb402f167cb7247ed2704ffd4eed2d5eee398ef41a680d5f"
+}

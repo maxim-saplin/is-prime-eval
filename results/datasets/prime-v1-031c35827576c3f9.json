@@ -1,0 +1,2184 @@
+{
+  "schema_version": 1,
+  "dataset_id": "prime-v1-031c35827576c3f9",
+  "sha256": "031c35827576c3f9fa0688270480ed97d2ed31347fc3d29f2debacf7510f687f",
+  "generator_version": "v1",
+  "seed": 3298726667213605434,
+  "depths": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "samples_per_class": 15,
+  "cases": [
+    {
+      "case_id": "d4-3701",
+      "depth": 4,
+      "number": 3701,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-5303",
+      "depth": 4,
+      "number": 5303,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-4840",
+      "depth": 4,
+      "number": 4840,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-5413",
+      "depth": 4,
+      "number": 5413,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-5647",
+      "depth": 4,
+      "number": 5647,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-2557",
+      "depth": 4,
+      "number": 2557,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-3844",
+      "depth": 4,
+      "number": 3844,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-1112",
+      "depth": 4,
+      "number": 1112,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-1049",
+      "depth": 4,
+      "number": 1049,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-1609",
+      "depth": 4,
+      "number": 1609,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-9465",
+      "depth": 4,
+      "number": 9465,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-5636",
+      "depth": 4,
+      "number": 5636,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-1627",
+      "depth": 4,
+      "number": 1627,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-9317",
+      "depth": 4,
+      "number": 9317,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-8935",
+      "depth": 4,
+      "number": 8935,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-7768",
+      "depth": 4,
+      "number": 7768,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-2297",
+      "depth": 4,
+      "number": 2297,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-6761",
+      "depth": 4,
+      "number": 6761,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-6675",
+      "depth": 4,
+      "number": 6675,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-1190",
+      "depth": 4,
+      "number": 1190,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-5311",
+      "depth": 4,
+      "number": 5311,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-6791",
+      "depth": 4,
+      "number": 6791,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-1259",
+      "depth": 4,
+      "number": 1259,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-4752",
+      "depth": 4,
+      "number": 4752,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-3461",
+      "depth": 4,
+      "number": 3461,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-5170",
+      "depth": 4,
+      "number": 5170,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-4267",
+      "depth": 4,
+      "number": 4267,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d4-1217",
+      "depth": 4,
+      "number": 1217,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-8863",
+      "depth": 4,
+      "number": 8863,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d4-5976",
+      "depth": 4,
+      "number": 5976,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-25457",
+      "depth": 5,
+      "number": 25457,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-24509",
+      "depth": 5,
+      "number": 24509,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-87633",
+      "depth": 5,
+      "number": 87633,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-99606",
+      "depth": 5,
+      "number": 99606,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-30698",
+      "depth": 5,
+      "number": 30698,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-41814",
+      "depth": 5,
+      "number": 41814,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-48541",
+      "depth": 5,
+      "number": 48541,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-75193",
+      "depth": 5,
+      "number": 75193,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-35141",
+      "depth": 5,
+      "number": 35141,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-32609",
+      "depth": 5,
+      "number": 32609,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-36035",
+      "depth": 5,
+      "number": 36035,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-25809",
+      "depth": 5,
+      "number": 25809,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-50587",
+      "depth": 5,
+      "number": 50587,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-95063",
+      "depth": 5,
+      "number": 95063,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-36634",
+      "depth": 5,
+      "number": 36634,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-53291",
+      "depth": 5,
+      "number": 53291,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-20393",
+      "depth": 5,
+      "number": 20393,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-23297",
+      "depth": 5,
+      "number": 23297,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-99317",
+      "depth": 5,
+      "number": 99317,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-56306",
+      "depth": 5,
+      "number": 56306,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-46096",
+      "depth": 5,
+      "number": 46096,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-20124",
+      "depth": 5,
+      "number": 20124,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-46947",
+      "depth": 5,
+      "number": 46947,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-42695",
+      "depth": 5,
+      "number": 42695,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-29913",
+      "depth": 5,
+      "number": 29913,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d5-25771",
+      "depth": 5,
+      "number": 25771,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-97231",
+      "depth": 5,
+      "number": 97231,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-62873",
+      "depth": 5,
+      "number": 62873,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-83101",
+      "depth": 5,
+      "number": 83101,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d5-89441",
+      "depth": 5,
+      "number": 89441,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-460244",
+      "depth": 6,
+      "number": 460244,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-327347",
+      "depth": 6,
+      "number": 327347,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-878659",
+      "depth": 6,
+      "number": 878659,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-347609",
+      "depth": 6,
+      "number": 347609,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-767827",
+      "depth": 6,
+      "number": 767827,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-122833",
+      "depth": 6,
+      "number": 122833,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-584804",
+      "depth": 6,
+      "number": 584804,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-619279",
+      "depth": 6,
+      "number": 619279,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-622621",
+      "depth": 6,
+      "number": 622621,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-485083",
+      "depth": 6,
+      "number": 485083,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-819680",
+      "depth": 6,
+      "number": 819680,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-572074",
+      "depth": 6,
+      "number": 572074,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-175333",
+      "depth": 6,
+      "number": 175333,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-566089",
+      "depth": 6,
+      "number": 566089,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-184386",
+      "depth": 6,
+      "number": 184386,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-673297",
+      "depth": 6,
+      "number": 673297,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-315456",
+      "depth": 6,
+      "number": 315456,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-487213",
+      "depth": 6,
+      "number": 487213,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-745543",
+      "depth": 6,
+      "number": 745543,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-249232",
+      "depth": 6,
+      "number": 249232,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-981641",
+      "depth": 6,
+      "number": 981641,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-845292",
+      "depth": 6,
+      "number": 845292,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-622151",
+      "depth": 6,
+      "number": 622151,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-571237",
+      "depth": 6,
+      "number": 571237,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-345853",
+      "depth": 6,
+      "number": 345853,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-513080",
+      "depth": 6,
+      "number": 513080,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-240821",
+      "depth": 6,
+      "number": 240821,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-187181",
+      "depth": 6,
+      "number": 187181,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d6-125750",
+      "depth": 6,
+      "number": 125750,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d6-762387",
+      "depth": 6,
+      "number": 762387,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-8634726",
+      "depth": 7,
+      "number": 8634726,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-5709013",
+      "depth": 7,
+      "number": 5709013,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-3643975",
+      "depth": 7,
+      "number": 3643975,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-2916521",
+      "depth": 7,
+      "number": 2916521,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-9159267",
+      "depth": 7,
+      "number": 9159267,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-6354307",
+      "depth": 7,
+      "number": 6354307,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-7824829",
+      "depth": 7,
+      "number": 7824829,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-8716450",
+      "depth": 7,
+      "number": 8716450,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-8746237",
+      "depth": 7,
+      "number": 8746237,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-1468261",
+      "depth": 7,
+      "number": 1468261,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-3044030",
+      "depth": 7,
+      "number": 3044030,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-1358713",
+      "depth": 7,
+      "number": 1358713,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-4834019",
+      "depth": 7,
+      "number": 4834019,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-2345669",
+      "depth": 7,
+      "number": 2345669,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-3733134",
+      "depth": 7,
+      "number": 3733134,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-5321107",
+      "depth": 7,
+      "number": 5321107,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-6313493",
+      "depth": 7,
+      "number": 6313493,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-1116223",
+      "depth": 7,
+      "number": 1116223,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-8568677",
+      "depth": 7,
+      "number": 8568677,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-7606019",
+      "depth": 7,
+      "number": 7606019,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-6608799",
+      "depth": 7,
+      "number": 6608799,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-9525817",
+      "depth": 7,
+      "number": 9525817,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-6283961",
+      "depth": 7,
+      "number": 6283961,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-3509827",
+      "depth": 7,
+      "number": 3509827,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-3910967",
+      "depth": 7,
+      "number": 3910967,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-8153262",
+      "depth": 7,
+      "number": 8153262,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-4730290",
+      "depth": 7,
+      "number": 4730290,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-8103391",
+      "depth": 7,
+      "number": 8103391,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d7-8729919",
+      "depth": 7,
+      "number": 8729919,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d7-8555505",
+      "depth": 7,
+      "number": 8555505,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-86191279",
+      "depth": 8,
+      "number": 86191279,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-77898829",
+      "depth": 8,
+      "number": 77898829,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-81857099",
+      "depth": 8,
+      "number": 81857099,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-52307233",
+      "depth": 8,
+      "number": 52307233,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-96165529",
+      "depth": 8,
+      "number": 96165529,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-91676615",
+      "depth": 8,
+      "number": 91676615,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-44916766",
+      "depth": 8,
+      "number": 44916766,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-16210397",
+      "depth": 8,
+      "number": 16210397,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-11727577",
+      "depth": 8,
+      "number": 11727577,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-14912801",
+      "depth": 8,
+      "number": 14912801,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-17447490",
+      "depth": 8,
+      "number": 17447490,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-42548681",
+      "depth": 8,
+      "number": 42548681,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-15070079",
+      "depth": 8,
+      "number": 15070079,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-80732053",
+      "depth": 8,
+      "number": 80732053,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-99194551",
+      "depth": 8,
+      "number": 99194551,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-85316461",
+      "depth": 8,
+      "number": 85316461,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-99728383",
+      "depth": 8,
+      "number": 99728383,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-29385734",
+      "depth": 8,
+      "number": 29385734,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-82325317",
+      "depth": 8,
+      "number": 82325317,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-78406553",
+      "depth": 8,
+      "number": 78406553,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-75302431",
+      "depth": 8,
+      "number": 75302431,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-65526886",
+      "depth": 8,
+      "number": 65526886,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-78035476",
+      "depth": 8,
+      "number": 78035476,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-51974851",
+      "depth": 8,
+      "number": 51974851,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-70290799",
+      "depth": 8,
+      "number": 70290799,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d8-73146632",
+      "depth": 8,
+      "number": 73146632,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-96714087",
+      "depth": 8,
+      "number": 96714087,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-32725573",
+      "depth": 8,
+      "number": 32725573,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-14677943",
+      "depth": 8,
+      "number": 14677943,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d8-64505521",
+      "depth": 8,
+      "number": 64505521,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-775704367",
+      "depth": 9,
+      "number": 775704367,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-980783439",
+      "depth": 9,
+      "number": 980783439,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-359939849",
+      "depth": 9,
+      "number": 359939849,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-577341020",
+      "depth": 9,
+      "number": 577341020,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-788823829",
+      "depth": 9,
+      "number": 788823829,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-129352181",
+      "depth": 9,
+      "number": 129352181,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-372286003",
+      "depth": 9,
+      "number": 372286003,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-254732432",
+      "depth": 9,
+      "number": 254732432,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-456257327",
+      "depth": 9,
+      "number": 456257327,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-795985637",
+      "depth": 9,
+      "number": 795985637,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-677403566",
+      "depth": 9,
+      "number": 677403566,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-962103124",
+      "depth": 9,
+      "number": 962103124,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-961660631",
+      "depth": 9,
+      "number": 961660631,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-181144422",
+      "depth": 9,
+      "number": 181144422,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-646767673",
+      "depth": 9,
+      "number": 646767673,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-394779375",
+      "depth": 9,
+      "number": 394779375,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-939808777",
+      "depth": 9,
+      "number": 939808777,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-877169297",
+      "depth": 9,
+      "number": 877169297,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-419394915",
+      "depth": 9,
+      "number": 419394915,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-670399388",
+      "depth": 9,
+      "number": 670399388,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-196745201",
+      "depth": 9,
+      "number": 196745201,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-849331330",
+      "depth": 9,
+      "number": 849331330,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-378816947",
+      "depth": 9,
+      "number": 378816947,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-602287291",
+      "depth": 9,
+      "number": 602287291,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-429298459",
+      "depth": 9,
+      "number": 429298459,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-730230751",
+      "depth": 9,
+      "number": 730230751,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-193263940",
+      "depth": 9,
+      "number": 193263940,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-488290323",
+      "depth": 9,
+      "number": 488290323,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d9-659181361",
+      "depth": 9,
+      "number": 659181361,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d9-668604427",
+      "depth": 9,
+      "number": 668604427,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-1994907674",
+      "depth": 10,
+      "number": 1994907674,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-3124852193",
+      "depth": 10,
+      "number": 3124852193,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-5665433831",
+      "depth": 10,
+      "number": 5665433831,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-3997754351",
+      "depth": 10,
+      "number": 3997754351,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-9880423457",
+      "depth": 10,
+      "number": 9880423457,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-1738506820",
+      "depth": 10,
+      "number": 1738506820,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-1137270161",
+      "depth": 10,
+      "number": 1137270161,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-5818501463",
+      "depth": 10,
+      "number": 5818501463,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-3777261901",
+      "depth": 10,
+      "number": 3777261901,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-7487675903",
+      "depth": 10,
+      "number": 7487675903,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-3233206423",
+      "depth": 10,
+      "number": 3233206423,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-3350573024",
+      "depth": 10,
+      "number": 3350573024,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-3279735596",
+      "depth": 10,
+      "number": 3279735596,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-2949941483",
+      "depth": 10,
+      "number": 2949941483,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-3915323381",
+      "depth": 10,
+      "number": 3915323381,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-9522661929",
+      "depth": 10,
+      "number": 9522661929,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-6639370027",
+      "depth": 10,
+      "number": 6639370027,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-8984026261",
+      "depth": 10,
+      "number": 8984026261,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-7321839589",
+      "depth": 10,
+      "number": 7321839589,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-1109199056",
+      "depth": 10,
+      "number": 1109199056,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-9938058271",
+      "depth": 10,
+      "number": 9938058271,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-8829433139",
+      "depth": 10,
+      "number": 8829433139,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-4299593213",
+      "depth": 10,
+      "number": 4299593213,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-7594134064",
+      "depth": 10,
+      "number": 7594134064,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-5029545671",
+      "depth": 10,
+      "number": 5029545671,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-7344251017",
+      "depth": 10,
+      "number": 7344251017,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-3709731631",
+      "depth": 10,
+      "number": 3709731631,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d10-4573230736",
+      "depth": 10,
+      "number": 4573230736,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-7305131620",
+      "depth": 10,
+      "number": 7305131620,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d10-2653539107",
+      "depth": 10,
+      "number": 2653539107,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-47452604651",
+      "depth": 11,
+      "number": 47452604651,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-66024759971",
+      "depth": 11,
+      "number": 66024759971,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-37512308271",
+      "depth": 11,
+      "number": 37512308271,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-82430404282",
+      "depth": 11,
+      "number": 82430404282,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-44650618489",
+      "depth": 11,
+      "number": 44650618489,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-70556328673",
+      "depth": 11,
+      "number": 70556328673,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-74865680957",
+      "depth": 11,
+      "number": 74865680957,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-97487183007",
+      "depth": 11,
+      "number": 97487183007,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-31103075871",
+      "depth": 11,
+      "number": 31103075871,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-20742607927",
+      "depth": 11,
+      "number": 20742607927,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-84372921489",
+      "depth": 11,
+      "number": 84372921489,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-83485807341",
+      "depth": 11,
+      "number": 83485807341,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-39563527937",
+      "depth": 11,
+      "number": 39563527937,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-29824755555",
+      "depth": 11,
+      "number": 29824755555,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-91847882889",
+      "depth": 11,
+      "number": 91847882889,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-76292976923",
+      "depth": 11,
+      "number": 76292976923,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-22085729567",
+      "depth": 11,
+      "number": 22085729567,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-61878441700",
+      "depth": 11,
+      "number": 61878441700,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-35484035675",
+      "depth": 11,
+      "number": 35484035675,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-98583079289",
+      "depth": 11,
+      "number": 98583079289,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-25701004297",
+      "depth": 11,
+      "number": 25701004297,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-48184180511",
+      "depth": 11,
+      "number": 48184180511,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-51861387727",
+      "depth": 11,
+      "number": 51861387727,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-41853100043",
+      "depth": 11,
+      "number": 41853100043,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-28358013379",
+      "depth": 11,
+      "number": 28358013379,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-21741999937",
+      "depth": 11,
+      "number": 21741999937,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-12897266999",
+      "depth": 11,
+      "number": 12897266999,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-28711020011",
+      "depth": 11,
+      "number": 28711020011,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d11-74114584546",
+      "depth": 11,
+      "number": 74114584546,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d11-15365299727",
+      "depth": 11,
+      "number": 15365299727,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-552921619903",
+      "depth": 12,
+      "number": 552921619903,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-311351424125",
+      "depth": 12,
+      "number": 311351424125,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-913518773267",
+      "depth": 12,
+      "number": 913518773267,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-875649071483",
+      "depth": 12,
+      "number": 875649071483,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-672386095947",
+      "depth": 12,
+      "number": 672386095947,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-324510640813",
+      "depth": 12,
+      "number": 324510640813,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-464244519103",
+      "depth": 12,
+      "number": 464244519103,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-846041070383",
+      "depth": 12,
+      "number": 846041070383,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-637242765479",
+      "depth": 12,
+      "number": 637242765479,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-632042288789",
+      "depth": 12,
+      "number": 632042288789,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-405974267102",
+      "depth": 12,
+      "number": 405974267102,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-854887384807",
+      "depth": 12,
+      "number": 854887384807,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-127018748341",
+      "depth": 12,
+      "number": 127018748341,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-676967905523",
+      "depth": 12,
+      "number": 676967905523,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-688032241471",
+      "depth": 12,
+      "number": 688032241471,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-714177234142",
+      "depth": 12,
+      "number": 714177234142,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-562137419983",
+      "depth": 12,
+      "number": 562137419983,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-689408590051",
+      "depth": 12,
+      "number": 689408590051,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-425112005247",
+      "depth": 12,
+      "number": 425112005247,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-401656453651",
+      "depth": 12,
+      "number": 401656453651,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-858925886954",
+      "depth": 12,
+      "number": 858925886954,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-265990354783",
+      "depth": 12,
+      "number": 265990354783,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-289422031619",
+      "depth": 12,
+      "number": 289422031619,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-548920824601",
+      "depth": 12,
+      "number": 548920824601,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d12-528557015458",
+      "depth": 12,
+      "number": 528557015458,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-714385966453",
+      "depth": 12,
+      "number": 714385966453,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-502559381788",
+      "depth": 12,
+      "number": 502559381788,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-179297459580",
+      "depth": 12,
+      "number": 179297459580,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-622938216911",
+      "depth": 12,
+      "number": 622938216911,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d12-334747112827",
+      "depth": 12,
+      "number": 334747112827,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-8674274715389",
+      "depth": 13,
+      "number": 8674274715389,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-2278206715483",
+      "depth": 13,
+      "number": 2278206715483,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-9257292271637",
+      "depth": 13,
+      "number": 9257292271637,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-5447308065781",
+      "depth": 13,
+      "number": 5447308065781,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-8045319532633",
+      "depth": 13,
+      "number": 8045319532633,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-5178851607990",
+      "depth": 13,
+      "number": 5178851607990,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-1539589895237",
+      "depth": 13,
+      "number": 1539589895237,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-4152654136231",
+      "depth": 13,
+      "number": 4152654136231,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-6575220513649",
+      "depth": 13,
+      "number": 6575220513649,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-8543642844673",
+      "depth": 13,
+      "number": 8543642844673,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-3285258985039",
+      "depth": 13,
+      "number": 3285258985039,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-1363510047533",
+      "depth": 13,
+      "number": 1363510047533,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-3413815155915",
+      "depth": 13,
+      "number": 3413815155915,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-7344900692075",
+      "depth": 13,
+      "number": 7344900692075,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-4386606255578",
+      "depth": 13,
+      "number": 4386606255578,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-9501148997731",
+      "depth": 13,
+      "number": 9501148997731,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-1613235349392",
+      "depth": 13,
+      "number": 1613235349392,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-3532777043179",
+      "depth": 13,
+      "number": 3532777043179,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-9395706455077",
+      "depth": 13,
+      "number": 9395706455077,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-3308510948807",
+      "depth": 13,
+      "number": 3308510948807,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-3579225258779",
+      "depth": 13,
+      "number": 3579225258779,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-2956962923360",
+      "depth": 13,
+      "number": 2956962923360,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-3908392669581",
+      "depth": 13,
+      "number": 3908392669581,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-3231930390841",
+      "depth": 13,
+      "number": 3231930390841,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d13-4432494197848",
+      "depth": 13,
+      "number": 4432494197848,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-1306413956209",
+      "depth": 13,
+      "number": 1306413956209,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-7138202738619",
+      "depth": 13,
+      "number": 7138202738619,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-5927966873400",
+      "depth": 13,
+      "number": 5927966873400,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-1064990143929",
+      "depth": 13,
+      "number": 1064990143929,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d13-5450621106877",
+      "depth": 13,
+      "number": 5450621106877,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-35313597415241",
+      "depth": 14,
+      "number": 35313597415241,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-66377171700629",
+      "depth": 14,
+      "number": 66377171700629,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-97779609428462",
+      "depth": 14,
+      "number": 97779609428462,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-37706843570317",
+      "depth": 14,
+      "number": 37706843570317,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-80705249553276",
+      "depth": 14,
+      "number": 80705249553276,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-12083646122179",
+      "depth": 14,
+      "number": 12083646122179,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-74333217291977",
+      "depth": 14,
+      "number": 74333217291977,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-45816069228763",
+      "depth": 14,
+      "number": 45816069228763,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-10696345865252",
+      "depth": 14,
+      "number": 10696345865252,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-28621274648917",
+      "depth": 14,
+      "number": 28621274648917,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-22909371808049",
+      "depth": 14,
+      "number": 22909371808049,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-62425405452381",
+      "depth": 14,
+      "number": 62425405452381,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-38133841230047",
+      "depth": 14,
+      "number": 38133841230047,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-94023989429213",
+      "depth": 14,
+      "number": 94023989429213,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-66229163748024",
+      "depth": 14,
+      "number": 66229163748024,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-50936364016865",
+      "depth": 14,
+      "number": 50936364016865,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-52560521516779",
+      "depth": 14,
+      "number": 52560521516779,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-95751037374287",
+      "depth": 14,
+      "number": 95751037374287,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-61573679677508",
+      "depth": 14,
+      "number": 61573679677508,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-91862493946079",
+      "depth": 14,
+      "number": 91862493946079,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-24209245534680",
+      "depth": 14,
+      "number": 24209245534680,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-84017945529407",
+      "depth": 14,
+      "number": 84017945529407,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-26887503621486",
+      "depth": 14,
+      "number": 26887503621486,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-78343294102788",
+      "depth": 14,
+      "number": 78343294102788,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-90511529118251",
+      "depth": 14,
+      "number": 90511529118251,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-78413183233892",
+      "depth": 14,
+      "number": 78413183233892,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-16414348983855",
+      "depth": 14,
+      "number": 16414348983855,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d14-80352540844187",
+      "depth": 14,
+      "number": 80352540844187,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-57553320287627",
+      "depth": 14,
+      "number": 57553320287627,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d14-48803786653398",
+      "depth": 14,
+      "number": 48803786653398,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-708446790805255",
+      "depth": 15,
+      "number": 708446790805255,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-146371619916732",
+      "depth": 15,
+      "number": 146371619916732,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-404680363136603",
+      "depth": 15,
+      "number": 404680363136603,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-589574723134913",
+      "depth": 15,
+      "number": 589574723134913,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-954955382586224",
+      "depth": 15,
+      "number": 954955382586224,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-690551727090697",
+      "depth": 15,
+      "number": 690551727090697,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-414322527986521",
+      "depth": 15,
+      "number": 414322527986521,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-281067411373913",
+      "depth": 15,
+      "number": 281067411373913,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-655423288676135",
+      "depth": 15,
+      "number": 655423288676135,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-226636007248207",
+      "depth": 15,
+      "number": 226636007248207,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-779177963494366",
+      "depth": 15,
+      "number": 779177963494366,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-557407655958497",
+      "depth": 15,
+      "number": 557407655958497,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-950257570225063",
+      "depth": 15,
+      "number": 950257570225063,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-413717455645081",
+      "depth": 15,
+      "number": 413717455645081,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-647588157480794",
+      "depth": 15,
+      "number": 647588157480794,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-559719314129224",
+      "depth": 15,
+      "number": 559719314129224,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-818921810350561",
+      "depth": 15,
+      "number": 818921810350561,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-501610959403493",
+      "depth": 15,
+      "number": 501610959403493,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-763537493734751",
+      "depth": 15,
+      "number": 763537493734751,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-556899630539303",
+      "depth": 15,
+      "number": 556899630539303,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-763267201278161",
+      "depth": 15,
+      "number": 763267201278161,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-368594985033241",
+      "depth": 15,
+      "number": 368594985033241,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-254696736534179",
+      "depth": 15,
+      "number": 254696736534179,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-202741604159519",
+      "depth": 15,
+      "number": 202741604159519,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-508711634742821",
+      "depth": 15,
+      "number": 508711634742821,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-508635899681567",
+      "depth": 15,
+      "number": 508635899681567,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-670707810564447",
+      "depth": 15,
+      "number": 670707810564447,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-820844325033027",
+      "depth": 15,
+      "number": 820844325033027,
+      "label": "COMPOSITE"
+    },
+    {
+      "case_id": "d15-779136060975901",
+      "depth": 15,
+      "number": 779136060975901,
+      "label": "PRIME"
+    },
+    {
+      "case_id": "d15-675255842523257",
+      "depth": 15,
+      "number": 675255842523257,
+      "label": "PRIME"
+    }
+  ]
+}

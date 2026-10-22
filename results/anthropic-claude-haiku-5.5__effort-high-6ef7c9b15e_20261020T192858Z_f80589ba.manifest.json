@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "run_id": "812489fb9743425fad4705ec25ee2139",
+  "created_at": "2026-10-20T19:28:58.563245Z",
+  "model": {
+    "model_id": "anthropic/claude-haiku-5.5",
+    "name": "Anthropic: Claude Haiku 5.5",
+    "prompt_rate_usd_per_million": "0.1000000",
+    "completion_rate_usd_per_million": "0.5000000",
+    "pricing_source": "OpenRouter /models catalog (uncached rates)",
+    "pricing_retrieved_at": "2026-10-20T15:41:37.331781Z",
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "tool_choice",
+      "tools",
+      "verbosity"
+    ],
+    "reasoning_effort": "high"
+  },
+  "config": {
+    "model_id": "anthropic/claude-haiku-5.5",
+    "reasoning_effort": "high",
+    "timeout_seconds": 600.0,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "samples_per_class": 10,
+    "seed": 2026,
+    "max_attempts": 6,
+    "retry_delay_seconds": 1.0,
+    "max_completion_tokens": null,
+    "min_request_interval_seconds": 4.0
+  },
+  "prompt": {
+    "version": "prime-label-v1",
+    "template": "Is {number} prime? Reply with only PRIME or COMPOSITE."
+  },
+  "parser_version": "bare-prime-composite-v1",
+  "dataset": {
+    "dataset_id": "prime-v1-fc48a8ff5cee2be5",
+    "sha256": "fc48a8ff5cee2be50fc87f51916018fba9bb856ea28b3616edfc734e7ebd9652",
+    "file": "datasets/prime-v1-fc48a8ff5cee2be5.json",
+    "case_count": 140,
+    "generator_version": "v1",
+    "seed": 2026,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "samples_per_class": 10
+  },
+  "pricing": {
+    "source": "OpenRouter /models catalog (uncached rates)",
+    "retrieved_at": "2026-10-20T15:41:37.331781Z",
+    "model_id": "anthropic/claude-haiku-5.5",
+    "prompt_rate_usd_per_million": "0.1000000",
+    "completion_rate_usd_per_million": "0.5000000"
+  },
+  "ledger_file": "anthropic-claude-haiku-5.5__effort-high-6ef7c9b15e_20261020T192858Z_f80589ba.jsonl",
+  "config_sha256": "dec88815e565712baa7a5859684d94253f6afd8eb1d5395eb0278f797b976fcf"
+}

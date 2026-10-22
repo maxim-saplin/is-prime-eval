@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "run_id": "42a1f16fa92643069f18a9ee16ca9c32",
+  "created_at": "2026-10-20T16:11:08.478288Z",
+  "model": {
+    "model_id": "openai/gpt-6-luna",
+    "name": "OpenAI: GPT-6 Luna",
+    "prompt_rate_usd_per_million": "0.1000000",
+    "completion_rate_usd_per_million": "0.5000000",
+    "pricing_source": "OpenRouter /models catalog (uncached rates)",
+    "pricing_retrieved_at": "2026-10-20T15:41:37.331704Z",
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "seed",
+      "structured_outputs",
+      "tool_choice",
+      "tools",
+      "verbosity"
+    ],
+    "reasoning_effort": "xhigh"
+  },
+  "config": {
+    "model_id": "openai/gpt-6-luna",
+    "reasoning_effort": "xhigh",
+    "timeout_seconds": 600.0,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "samples_per_class": 10,
+    "seed": 2026,
+    "max_attempts": 6,
+    "retry_delay_seconds": 1.0,
+    "max_completion_tokens": null,
+    "min_request_interval_seconds": 4.0
+  },
+  "prompt": {
+    "version": "prime-label-v1",
+    "template": "Is {number} prime? Reply with only PRIME or COMPOSITE."
+  },
+  "parser_version": "bare-prime-composite-v1",
+  "dataset": {
+    "dataset_id": "prime-v1-fc48a8ff5cee2be5",
+    "sha256": "fc48a8ff5cee2be50fc87f51916018fba9bb856ea28b3616edfc734e7ebd9652",
+    "file": "datasets/prime-v1-fc48a8ff5cee2be5.json",
+    "case_count": 140,
+    "generator_version": "v1",
+    "seed": 2026,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "samples_per_class": 10
+  },
+  "pricing": {
+    "source": "OpenRouter /models catalog (uncached rates)",
+    "retrieved_at": "2026-10-20T15:41:37.331704Z",
+    "model_id": "openai/gpt-6-luna",
+    "prompt_rate_usd_per_million": "0.1000000",
+    "completion_rate_usd_per_million": "0.5000000"
+  },
+  "ledger_file": "openai-gpt-6-luna__effort-xhigh-b5255978be_20261020T161108Z_9d5beb06.jsonl",
+  "config_sha256": "251ceaae987801af3012d9e2f9de58d804da744d44d42de8db721d4b469049af"
+}

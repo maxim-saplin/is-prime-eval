@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "run_id": "8cba26bf34fd45b8b56c22472b7021be",
+  "created_at": "2026-10-21T10:22:16.835687Z",
+  "model": {
+    "model_id": "inception/mercury-3",
+    "name": "Inception: Mercury 3",
+    "prompt_rate_usd_per_million": "0.1000000",
+    "completion_rate_usd_per_million": "0.35000000",
+    "pricing_source": "OpenRouter /models catalog (uncached rates)",
+    "pricing_retrieved_at": "2026-10-21T10:22:16.826249Z",
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools"
+    ],
+    "reasoning_effort": null
+  },
+  "config": {
+    "model_id": "inception/mercury-3",
+    "reasoning_effort": null,
+    "timeout_seconds": 600.0,
+    "seed": 11451479909346303475,
+    "seed_source": "system_random",
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "samples_per_class": 15,
+    "samples_per_class_by_depth": null,
+    "max_attempts": 6,
+    "retry_delay_seconds": 1.0,
+    "max_completion_tokens": null,
+    "min_request_interval_seconds": 4.0
+  },
+  "prompt": {
+    "version": "prime-label-v1",
+    "template": "Is {number} prime? Reply with only PRIME or COMPOSITE."
+  },
+  "parser_version": "bare-prime-composite-v1",
+  "dataset": {
+    "dataset_id": "prime-v1-3792872e5d995499",
+    "sha256": "3792872e5d99549921518b6162542f407bdf4c1b69da616f5c9cdf5100ae664b",
+    "file": "datasets/prime-v1-3792872e5d995499.json",
+    "case_count": 360,
+    "generator_version": "v1",
+    "seed": 11451479909346303475,
+    "depths": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "samples_per_class": 15
+  },
+  "pricing": {
+    "source": "OpenRouter /models catalog (uncached rates)",
+    "retrieved_at": "2026-10-21T10:22:16.826249Z",
+    "model_id": "inception/mercury-3",
+    "prompt_rate_usd_per_million": "0.1000000",
+    "completion_rate_usd_per_million": "0.35000000"
+  },
+  "ledger_file": "inception-mercury-3__effort-omitted-74234e98af_20261021T102216Z_98fb31fb.jsonl",
+  "config_sha256": "a5cec2deef23b35b541c20ee8ef3b7d9b2269a2c875d0c6bb83992fb6f8e86fb"
+}
